@@ -535,12 +535,12 @@ if ncpu >1:
         datasizes.append(shape[0] - start) 
         starts.append(starts[-1]+timesteps_per_block)
 
-    # Construct the headers
-    headers = []
-    for j in range(TIMEBLOCKS):
-        Hloc = copy.deepcopy(H)
-        Hloc['CRVAL6'] += Hloc['CDELT6'] * starts[j]
-        headers.append(Hloc)
+        # Construct the headers
+        headers = []
+        for j in range(TIMEBLOCKS):
+            Hloc = copy.deepcopy(H)
+            Hloc['CRVAL6'] += Hloc['CDELT6'] * starts[j]
+            headers.append(Hloc)
 
 
     if TIMEBLOCKS == 1:
