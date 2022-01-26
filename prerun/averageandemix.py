@@ -87,6 +87,6 @@ for ms in mslist:
  
    print(cmd)
    os.system(cmd)
-   shutil.rmdir(ms)
+   shutil.rmtree(ms)
 
 os.chdir(cwd)

@@ -50,6 +50,8 @@ targets = [ {'name' : 'CasA', 'ra' : 6.123487680622104,  'dec' : 1.0265153995604
             {'name' : 'VirA', 'ra' : 3.276086511413598,  'dec' : 0.21626589533567378},
             {'name' : 'HydraA', 'ra' : 2.4352, 'dec' : -0.21099}]
 
+current_point = []
+
 def detect_ateam(point):
     for target in targets:
         name = target['name']
@@ -85,6 +87,12 @@ def on_pick(event):
     selected_index = event.ind[np.argmax(selfluxes)]
 
     coord = w.pixel_to_world(*data[selected_index])
+    try:
+        current_point[-1].remove()
+    except:
+        pass
+    curpoint = axes.scatter([data[selected_index][0]],[data[selected_index][1]],color='None',edgecolor='red',s=120)
+    current_point.append(curpoint)
     print(f'"({coord.ra.value}, {coord.dec.value})"')
     process_pointing(coord)
 
@@ -146,6 +154,7 @@ if __name__ == "__main__":
     axes = fig.add_subplot(121,projection=w)
     axes.set_transform(w)
     axes.coords[0].set_ticks(number=10)
+    axes.set_title(f'P{parser.coord}')
     axes.coords[1].set_ticks(number=10)
     axes.grid(True)
     axes.set_ylim(0,2048)

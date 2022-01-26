@@ -276,7 +276,7 @@ def pre_init(location):
         proc = mp.Process(target=_run_demix, args=(location,))
         proc.start()
         demix_pool.append(proc)
-        time.sleep(3*60) # Wait 3 minutes for the SB to load
+        time.sleep(10*60) # Wait 10 minutes for the SB to load, also buffers for optimal performance
     
     for proc in demix_pool:
         proc.join()
