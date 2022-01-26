@@ -58,7 +58,7 @@ parser.add_argument('--stepsizepadding', help='Add padding direction every steps
 parser.add_argument('--H5file', help='H5 file', type=str, required=True)
 parser.add_argument('--FITSscreen', help='Output FITS screen file', type=str, default='gainscreen_rbf.fits')
 parser.add_argument('--freqdownsamplefactor', help='Downsample freq axis with this factor, needs to be a multiple on the input freq length', type=int, default=None)
-parser.add_argument('--plotsfortesting', help='Only for testing.....', action='store_true')
+parser.add_argument('--plotsfortesting', help='Show plots for testing. Requires an argument equal to the station that you want to show. Also, will be ignored if ncpu!=1.', default=None,type=str)
 parser.add_argument('--ms', help='Measurement set to be imaged with IDG, phasecenter location is taken from the ms', type=str,required=True)
 parser.add_argument('--ncpu', help='Amount of subprocesses that are to be spawned for computation of gainscreens. This is a memory limited step, and non-unity values of ncpu might slow down this process!', type=int, default=1)
 parser.add_argument('--timeblocks', help='Break up the final gainscreen in timeblocks, which will decrease the memory footprint',default=1,type=int)
@@ -69,6 +69,7 @@ args = vars(parser.parse_args())
 fitsfilename = args['FITSscreen']
 fitsfilename_prefix = fitsfilename.split('.fits')[0]
 
+print('Plotting: '+args['plotsfortesting'])
 if not args['includeamps']:
    if args['smoothamps']:
       print('Cannot use  --includeamps=False and --smoothamps, they are mutually exclusive...')
@@ -191,6 +192,9 @@ h5_stations = list(st.getAxisValues('ant'))
 
 print(h5_stations, names)
 
+if args['plotsfortesting'] != None and args['plotsfortesting'] not in h5_stations:
+    raise ValueError(f'{args["plotsfortesting"]} is not in h5_stations!')
+
 # Find nearest pixel for a given direction.
 H = fits.Header.fromstring(header, sep='\n')
 wcs = WCS(H).celestial
@@ -276,10 +280,106 @@ DEC = np.asarray(DEC)
 # Interpolate the grid using a nearest neighbour approach.
 # https://stackoverflow.com/questions/5551286/filling-gaps-in-a-numpy-array
 
+def plotScreens(data_int,station,ifreq,antenna,h5_stations,xxwcs,yywcs, RA_X,DEC_Y):
+    '''
+        In development
+    '''
+    try:
+        os.mkdir('plots')
+    except:
+        pass
+    aspect = 'auto'
+    minmaxa = [0.2,3]
+    timid = 10
+    ifreqtosave = ifreq
+    if np.shape(data_int)[1] == 1:
+        ifreq = 0
+    symsize = 50.
+    zminmax = np.ceil(np.max(np.abs(data_int[timid, ifreq, antenna, 0, :, :])))
+    minmaxr = [-zminmax*1.2,zminmax*1.2]
+
+    pltstation = station
+
+    fig = plt.figure(figsize=(16, 6))
+    fig.add_subplot(241)
+    plt.imshow(data_int[timid, ifreq, antenna, 0, :, :], vmin=minmaxr[0], vmax=minmaxr[1], extent=[np.min(xxwcs),np.max(xxwcs),np.min(yywcs),np.max(yywcs)],origin='lower',aspect=aspect, cmap='gnuplot2')
+    #print(RA_X, DEC_Y)
+    #print(h5_stations.index(pltstation))
+    plt.scatter(RA_X, DEC_Y, s=symsize, edgecolors='black', vmin=minmaxr[0], vmax=minmaxr[1], c=np.real(gains[timid,ifreq, h5_stations.index(pltstation),:, 0]), cmap='gnuplot2')
+    plt.title(station + ' real XX')
+    plt.xlabel('pixels')
+    plt.ylabel('pixels')
+    plt.colorbar()
+
+
+    fig.add_subplot(242)
+    plt.imshow(data_int[timid, ifreq, antenna, 1, :, :], vmin=minmaxr[0], vmax=minmaxr[1],extent=[np.min(xxwcs),np.max(xxwcs),np.min(yywcs),np.max(yywcs)],origin='lower',aspect=aspect, cmap='gnuplot2')
+    plt.scatter(RA_X, DEC_Y, s=symsize, edgecolors='black', vmin=minmaxr[0], vmax=minmaxr[1], c=np.imag(gains[timid,ifreq, h5_stations.index(pltstation),:, 0]), cmap='gnuplot2')
+    plt.title(station + ' imaginary XX')
+    plt.xlabel('pixels')
+    plt.ylabel('pixels')
+    plt.colorbar()
+
+
+    fig.add_subplot(243)
+    plt.imshow( np.angle( data_int[timid, ifreq, antenna, 0, :, :] +  data_int[timid, ifreq, antenna, 1, :, :]*1j), vmin=-np.pi, vmax=np.pi,extent=[np.min(xxwcs),np.max(xxwcs),np.min(yywcs),np.max(yywcs)],origin='lower',aspect=aspect, cmap='hsv')
+    plt.scatter(RA_X, DEC_Y, s=symsize, edgecolors='black', vmin=-np.pi, vmax=np.pi, c=np.angle(gains[timid,ifreq, h5_stations.index(pltstation),:, 0]), cmap='hsv')
+    plt.xlabel('pixels')
+    plt.ylabel('pixels')
+    plt.title(station + ' phase XX')
+    plt.colorbar()         
+
+    fig.add_subplot(244)
+    plt.imshow( np.sqrt( (data_int[timid, ifreq, antenna, 0, :, :])**2 +  (data_int[timid, ifreq, antenna, 1, :, :])**2), vmin=minmaxa[0], vmax=minmaxa[1],extent=[np.min(xxwcs),np.max(xxwcs),np.min(yywcs),np.max(yywcs)],origin='lower',aspect=aspect, cmap='viridis')
+    plt.scatter(RA_X, DEC_Y, s=symsize, edgecolors='black', vmin=minmaxa[0], vmax=minmaxa[1], c=np.abs(gains[timid,ifreq, h5_stations.index(pltstation),:, 0]), cmap='viridis')
+    plt.xlabel('pixels')
+    plt.ylabel('pixels')
+    plt.title(station + ' amplitude XX')
+    plt.colorbar()
+
+    fig.add_subplot(245)
+    plt.imshow(data_int[timid, ifreq, antenna, 2, :, :], vmin=minmaxr[0], vmax=minmaxr[1],extent=[np.min(xxwcs),np.max(xxwcs),np.min(yywcs),np.max(yywcs)],origin='lower',aspect=aspect, cmap='gnuplot2')
+    plt.scatter(RA_X, DEC_Y, s=symsize, edgecolors='black', vmin=minmaxr[0], vmax=minmaxr[1], c=np.real(gains[timid,ifreq, h5_stations.index(pltstation),:, -1]), cmap='gnuplot2')
+    plt.xlabel('pixels')
+    plt.ylabel('pixels')
+    plt.title(station + ' real YY')
+    plt.colorbar()
+
+
+    fig.add_subplot(246)
+    plt.imshow(data_int[timid, ifreq, antenna, 3, :, :], vmin=minmaxr[0], vmax=minmaxr[1],extent=[np.min(xxwcs),np.max(xxwcs),np.min(yywcs),np.max(yywcs)],origin='lower',aspect=aspect, cmap='gnuplot2')
+    plt.scatter(RA_X, DEC_Y, s=symsize, edgecolors='black', vmin=minmaxr[0], vmax=minmaxr[1], c=np.imag(gains[timid,ifreq, h5_stations.index(pltstation),:, -1]), cmap='gnuplot2')
+    plt.title(station + ' imaginary YY')
+    plt.xlabel('pixels')
+    plt.ylabel('pixels')
+    plt.colorbar()
+
+    fig.add_subplot(247)
+    plt.imshow( np.angle( data_int[timid, ifreq, antenna, 2, :, :] +  data_int[timid, ifreq, antenna, 3, :, :]*1j), vmin=-np.pi, vmax=np.pi,extent=[np.min(xxwcs),np.max(xxwcs),np.min(yywcs),np.max(yywcs)],origin='lower',aspect=aspect, cmap='hsv')
+    plt.scatter(RA_X, DEC_Y, s=symsize, edgecolors='black', vmin=-np.pi, vmax=np.pi, c=np.angle(gains[timid,ifreq, h5_stations.index(pltstation),:, -1]), cmap='hsv')
+    plt.xlabel('pixels')
+    plt.ylabel('pixels')
+    plt.title(station + ' phase XX')
+    plt.colorbar()  
+
+    fig.add_subplot(248)
+    plt.imshow( np.sqrt( (data_int[timid, ifreq, antenna, 2, :, :])**2 + (data_int[timid, ifreq, antenna, 3, :, :])**2),vmin=minmaxa[0],vmax=minmaxa[1],extent=[np.min(xxwcs),np.max(xxwcs),np.min(yywcs),np.max(yywcs)],origin='lower',aspect=aspect, cmap='viridis')
+    plt.scatter(RA_X, DEC_Y, s=symsize, edgecolors='black', vmin=minmaxa[0], vmax=minmaxa[1], c=np.abs(gains[timid,ifreq, h5_stations.index(pltstation),:, -1]), cmap='viridis')
+    plt.title(station + ' amplitude YY')
+    plt.xlabel('pixels')
+    plt.ylabel('pixels')
+    plt.colorbar()
+
+    plt.tight_layout()
+    plt.savefig(f'plots/{station}_{ifreqtosave}.png')
 
 
 #def interpolate_station(antidx, interpidx, x_from, y_from, tecs, x_to, y_to):
 def interpolate_station(antname,ifstep, ntimes, padding=False, includeamps=True, scalarpol=False, smoothamps=False):
+    '''
+        This function is the 'main' function, doing the heavy lifting
+        maybe we need to add a show_plot functionality in here somewhere? Maybe not?
+    '''
     print ('Doing', antname)
     #print('Processing antenna {:s}.'.format(antname))
     if 'ST001' in h5_stations:
@@ -484,6 +584,9 @@ def single_writerun(ifreq):
         #print('data_int: ', data_int.shape)
         data_int[:-1, antenna, :, :, :] = screen[:, 0, 0, :, :, :]
         data_int[-1, antenna, :, :, :] = screen[-1, 0, 0, :, :, :]
+        if args['plotsfortesting'] == station:
+            print('PLOTTING')
+            plotScreens(data_int[:,np.newaxis,:,:,:,:],station,ifreq,antenna,h5_stations,xxwcs,yywcs,RA_X,DEC_Y)
     hdu = fits.PrimaryHDU()
     hdu.data = data_int
     hdu.writeto('partfits_{}.fits'.format(ifreq),overwrite=True)
@@ -605,6 +708,9 @@ if ncpu == 1:
             #print('data_int: ', data_int.shape)
             data_int[:-1, ifreq, antenna, :, :, :] = screen[:, 0, 0, :, :, :]
             data_int[-1, ifreq, antenna, :, :, :] = screen[-1, 0, 0, :, :, :]
+            if station == args['plotsfortesting']:
+                print('PLOTTING')
+                plotScreens(data_int,station,ifreq,antenna,h5_stations,xxwcs,yywcs,RA_X,DEC_Y)
 
     print(TIMEBLOCKS)
     if TIMEBLOCKS == 1:
