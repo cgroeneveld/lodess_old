@@ -69,7 +69,9 @@ args = vars(parser.parse_args())
 fitsfilename = args['FITSscreen']
 fitsfilename_prefix = fitsfilename.split('.fits')[0]
 
-print('Plotting: '+args['plotsfortesting'])
+if args['plotsfortesting'] != None:
+    print('Plotting: '+args['plotsfortesting'])
+
 if not args['includeamps']:
    if args['smoothamps']:
       print('Cannot use  --includeamps=False and --smoothamps, they are mutually exclusive...')
@@ -284,6 +286,8 @@ def plotScreens(data_int,station,ifreq,antenna,h5_stations,xxwcs,yywcs, RA_X,DEC
     '''
         In development
     '''
+    if np.any(RA_X < xxwcs[0]) or np.any(RA_X > xxwcs[1]) or np.any(DEC_Y < yywcs[0]) or np.any(DEC_Y > yywcs[1]):
+        raise ValueError("One of the pointings has center that is beyond the plotting window. Please check your boxsize")
     try:
         os.mkdir('plots')
     except:
