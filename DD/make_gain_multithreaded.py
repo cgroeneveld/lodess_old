@@ -64,15 +64,15 @@ parser.add_argument('--ncpu', help='Amount of subprocesses that are to be spawne
 parser.add_argument('--timeblocks', help='Break up the final gainscreen in timeblocks, which will decrease the memory footprint',default=1,type=int)
 
 
-if not args['includeamps']:
-   if args['smoothamps']:
-      print('Cannot use  --includeamps=False and --smoothamps, they are mutually exclusive...')
-      sys.exit()
 
 args = vars(parser.parse_args())
 fitsfilename = args['FITSscreen']
 fitsfilename_prefix = fitsfilename.split('.fits')[0]
 
+if not args['includeamps']:
+   if args['smoothamps']:
+      print('Cannot use  --includeamps=False and --smoothamps, they are mutually exclusive...')
+      sys.exit()
 
 ms = args['ms']
 h5p =  args['H5file'] 
@@ -524,15 +524,16 @@ if ncpu >1:
 
     # Compute the amount of timesteps precisely
 
-    datasizes = []
-    start = 0
-    starts = []
-    for i in range(TIMEBLOCKS-1):
-        datasizes.append(timesteps_per_block)
-        starts.append(start)
-        start+=timesteps_per_block
-    datasizes.append(shape[0] - start) 
-    starts.append(starts[-1]+timesteps_per_block)
+    if TIMEBLOCKS != 1:
+        datasizes = []
+        start = 0
+        starts = []
+        for i in range(TIMEBLOCKS-1):
+            datasizes.append(timesteps_per_block)
+            starts.append(start)
+            start+=timesteps_per_block
+        datasizes.append(shape[0] - start) 
+        starts.append(starts[-1]+timesteps_per_block)
 
     # Construct the headers
     headers = []
@@ -605,6 +606,7 @@ if ncpu == 1:
             data_int[:-1, ifreq, antenna, :, :, :] = screen[:, 0, 0, :, :, :]
             data_int[-1, ifreq, antenna, :, :, :] = screen[-1, 0, 0, :, :, :]
 
+    print(TIMEBLOCKS)
     if TIMEBLOCKS == 1:
         hdu = fits.PrimaryHDU(header=H)
         hdu.data = data_int
