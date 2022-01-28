@@ -399,8 +399,8 @@ def consolidated_target(target):
     os.system('cp -r target_cal/merged_selfcalcyle004* .') # Keep their original names - we know what form they are in
     for outname in glob.glob('L*concat.ms'):
         cmd = f'DPPP msin={outname} msout=DI_image/corrected_{outname} msin.datacolumn=CALCORRECT_DATA_CIRC steps=[ac1,ac2] msout.writefullresflag=false msout.storagemanager=dysco '
-        cmd += f'ac1.type=applycal ac1.parmdb=merged_selfcalcyle004_phaseshifted_{outname}.h5 ac1.solset=sol000 ac1.correction=phase000 '
-        cmd += f'ac2.type=applycal ac2.parmdb=merged_selfcalcyle004_phaseshifted_{outname}.h5 ac2.solset=sol000 ac2.correction=amplitude000 '
+        cmd += f'ac1.type=applycal ac1.parmdb=merged_selfcalcyle004_phaseshifted_{outname}.copy.h5 ac1.solset=sol000 ac1.correction=phase000 '
+        cmd += f'ac2.type=applycal ac2.parmdb=merged_selfcalcyle004_phaseshifted_{outname}.copy.h5 ac2.solset=sol000 ac2.correction=amplitude000 '
         print(cmd)
         os.system(cmd)
     os.chdir('DI_image')
