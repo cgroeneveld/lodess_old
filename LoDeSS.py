@@ -231,9 +231,9 @@ def initrun(LnumLoc):
         Lnum = LnumLoc[0].split('/')[-2]
     else:
         lnums = [l.split('/')[-2] for l in LnumLoc]
-        fl = glob.glob(Lnumloc[0]+'/*MS')[0] # find example file
+        fl = glob.glob(LnumLoc[0]+'/*MS')[0] # find example file
         t = pt.table(fl+'::FIELD')
-        Lnum = fl.getcol('CODE')[0]
+        Lnum = t.getcol('CODE')[0]
     os.mkdir(Lnum)
     os.system(f'cp -r {glob.glob("*py")[0]} {Lnum}')
     os.system(f'cp -r /net/rijn/data2/groeneveld/largefiles/Band_PA.h5 {Lnum}')
@@ -533,7 +533,7 @@ if __name__ == "__main__":
         os.system('touch calls.log')
     with open('calls.log','a') as handle:
         handle.write('\n')
-        handle.write(call)
+        handle.write('python '+call)
 
     if res.direction != None:
         if res.direction[0] == '(':
