@@ -444,6 +444,8 @@ def dd_pipeline(location,boxes,nthreads,target):
         This pipeline requires boxes to be pre-determined, as this is 
         a difficult step to automize. Maybe in the future...
     '''
+    if boxes == None:
+        boxes = f'{location[0]}/extract_directions/regions_ws1/'
     boxes = os.path.abspath(boxes)
     os.chdir(location[0]) # For now... but not really. This should be pointing to the name of the pointing
     os.mkdir('DD_cal')
