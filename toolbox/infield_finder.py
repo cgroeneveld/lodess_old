@@ -62,6 +62,7 @@ def detect_ateam(point):
 
     pointgal = point.transform_to('galactic')
     print(f'Galactic Coordinates: l: {pointgal.l.value:.4f} deg     b: {pointgal.b.value:.4f} deg')
+    print('------------------------------')
 
 
 def fix_name(name):
