@@ -31,7 +31,7 @@ c3c196= np.array([2.15374139,0.8415521])
 
 ROOT_FOLDER = '/net/rijn/data2/groeneveld/LoDeSS_files/'
 HELPER_SCRIPTS = '/net/rijn/data2/rvweeren/LoTSS_ClusterCAL/'
-FACET_PIPELINE = HELPER_SCRIPTS + 'facetselfcal.py'
+FACET_PIPELINE = ROOT_FOLDER + 'lofar_facet_selfcal/facetselfcal.py'
 
 def add_dummyms(msfiles):
     '''
@@ -337,6 +337,7 @@ def individual_target(Lnum,calfile,target):
     os.system(f'mv {Lnum}*msdemix {Lnum}')
     os.chdir(Lnum)
     os.system(f'cp -r {calfile} calibrator.h5')
+    os.system(f'cp -r ../Band_PA.h5 .')
     missinglist = find_missing_stations()
 
     mslist = sorted(glob.glob('*msdemix'))
@@ -357,7 +358,7 @@ def individual_target(Lnum,calfile,target):
     os.system(cmd)
 
     # Go to circular ...
-    os.system('cp -r {ROOT_FOLDER}lin2circ.py .')
+    os.system(f'cp -r {ROOT_FOLDER}lin2circ.py .')
     os.system(f'python lin2circ.py -i {outname} -c DATA -o DATA_CIRC')
 
     # Now, apply the calfile
@@ -444,7 +445,7 @@ def dd_pipeline(location,boxes,nthreads,target):
         a difficult step to automize. Maybe in the future...
     '''
     boxes = os.path.abspath(boxes)
-    os.chdir(location)
+    os.chdir(location[0]) # For now...
     os.mkdir('DD_cal')
     os.chdir('DD_cal')
     os.system(f'cp -r {boxes} ./rectangles')

@@ -37,7 +37,7 @@ for model in modelfiles:
     os.system(f'cp -r {model} run_{runname}/{model}')
 os.system(f'cp -r *.py run_{runname}/')
 msnames = glob.glob('*.ms')
-os.system(f'cp -r {msnames} run_{runname}')
+os.system(f'cp -r *ms run_{runname}')
 
 # iterate through each direction
 while len(os.listdir('PROGRESS/')) != 0:

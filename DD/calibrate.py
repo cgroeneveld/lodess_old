@@ -9,9 +9,13 @@ import sys
     Output: a lot of files, images, losoto-plots and merged.h5
 '''
 
+ROOT_FOLDER = '/net/rijn/data2/groeneveld/LoDeSS_files/'
+HELPER_SCRIPTS = '/net/rijn/data2/rvweeren/LoTSS_ClusterCAL/'
+FACET_PIPELINE = ROOT_FOLDER + 'lofar_facet_selfcal/facetselfcal.py'
+
 CHOUT = 12
 STOP  =  6
 
 peelnum = sys.argv[1]
-callstring = f"python /net/rijn/data2/rvweeren/LoTSS_ClusterCAL/runwscleanLBautoR.py -b Dir{peelnum}.reg --startfromtgss --usemodeldataforsolints --usewgridder True --channelsout={CHOUT} --stop={STOP} --uvmin=60 --docircular --BLsmooth Dir{peelnum}.*.peel.ms"
+callstring = f"python {FACET_PIPELINE} -b Dir{peelnum}.reg --startfromtgss --usemodeldataforsolints --usewgridder True --channelsout={CHOUT} --stop={STOP} --uvmin=60 --docircular --BLsmooth Dir{peelnum}.*.peel.ms"
 os.system(callstring)
