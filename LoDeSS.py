@@ -445,7 +445,7 @@ def dd_pipeline(location,boxes,nthreads,target):
         a difficult step to automize. Maybe in the future...
     '''
     boxes = os.path.abspath(boxes)
-    os.chdir(location[0]) # For now...
+    os.chdir(location[0]) # For now... but not really. This should be pointing to the name of the pointing
     os.mkdir('DD_cal')
     os.chdir('DD_cal')
     os.system(f'cp -r {boxes} ./rectangles')
