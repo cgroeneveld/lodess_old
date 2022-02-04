@@ -520,7 +520,7 @@ if __name__ == "__main__":
     parse.add_argument('--direction',help='Direction to go to when using the target pipeline. Format: "[xxx.xxdeg,yyy.yydeg]"', default=None,type=str)
     parse.add_argument('--boxes', help='Folder with boxes, called DirXX. Needed for direction dependent calibration')
     parse.add_argument('--nthreads', default=6, help='Amount of threads to be spawned by DD calibration. 5 will basically fill up a 96 core node (~100 load avg)')
-    parse.add_argument('--prerun', action = 'store_true', help='Do this if the folder contains raw .tar files instead of demixed folders. Untarring has to happen on the node itself - so from a performance POV this might not be a good choice.')
+    parse.add_argument('--demix', action = 'store_true', help='Do this if the folder contains raw .tar files instead of demixed folders. Untarring has to happen on the node itself - so from a performance POV this might not be a good choice.')
     parse.add_argument('--pipeline', help='Pipeline of choice', choices=['DD','DI_target','DI_calibrator','DDF','full'])
     parse.add_argument('-d','--debug', help='Debugging option, please don\'t touch',action='store_true')
 
@@ -558,7 +558,7 @@ if __name__ == "__main__":
         print("Stopping for debugging...")
         sys.exit(0)
 
-    if res.prerun:
+    if res.demix:
         for loc in location:
             pre_init(loc)
 
