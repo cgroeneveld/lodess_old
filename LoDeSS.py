@@ -521,6 +521,7 @@ if __name__ == "__main__":
     parse.add_argument('--boxes', help='Folder with boxes, called DirXX. Needed for direction dependent calibration')
     parse.add_argument('--nthreads', default=6, help='Amount of threads to be spawned by DD calibration. 5 will basically fill up a 96 core node (~100 load avg)')
     parse.add_argument('--demix', '--prerun',action = 'store_true', help='Do this if the folder contains raw .tar files instead of demixed folders. Untarring has to happen on the node itself - so from a performance POV this might not be a good choice.')
+    parse.add_argument('--delete_files', action='store_true', help='Deletes files after running the pipelne. Only recommended for the calibrator pipeline!')
     parse.add_argument('--pipeline', help='Pipeline of choice', choices=['DD','DI_target','DI_calibrator','DDF','full'])
     parse.add_argument('-d','--debug', help='Debugging option, please don\'t touch',action='store_true')
 
@@ -532,6 +533,8 @@ if __name__ == "__main__":
             raise ValueError('Must give as many calibrator files as MS locations when running the DI pipeline')
     if len(res.location)>1 and res.pipeline=='DI_calibrator':
         raise ValueError('Only use 1 measurement for the calibrator pipeline')
+    if res.delete_files and res.pipeline!='DI_calibrator':
+        raise ValueError('Deleting files automatically is currently only supported for the DI calibrator pipeline.')
 
     location = res.location
     call = ' '.join(sys.argv)
@@ -591,3 +594,11 @@ if __name__ == "__main__":
         os.chdir(wd)
         DDF_pipeline('./',None)
 
+    if res.delete_files and res.pipeline == 'DI_calibrator':
+        # Delete measurement sets. This should be the bulk anyways...
+        os.system('rm -rf *msdemix')
+        os.system('rm -rf *.split')
+        os.system('rm -rf *corr')
+        os.mkdir('FITSimages')
+        os.system('mv *fits FITSimages')
+        pass
