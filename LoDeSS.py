@@ -30,8 +30,9 @@ c3c380= np.array([-1.44194739, 0.85078014])
 c3c196= np.array([2.15374139,0.8415521])
 
 ROOT_FOLDER = '/net/rijn/data2/groeneveld/LoDeSS_files/'
-HELPER_SCRIPTS = '/net/rijn/data2/rvweeren/LoTSS_ClusterCAL/'
+HELPER_SCRIPTS = '/net/rijn/data2/groeneveld/LoDeSS_files/lofar_facet_selfcal/'
 FACET_PIPELINE = ROOT_FOLDER + 'lofar_facet_selfcal/facetselfcal.py'
+H5_HELPER = '/net/rijn/data2/groeneveld/lofar_helpers/'
 
 def add_dummyms(msfiles):
     '''
@@ -231,7 +232,7 @@ def initrun(LnumLoc):
         Lnum = LnumLoc[0].split('/')[-2]
     else:
         lnums = [l.split('/')[-2] for l in LnumLoc]
-        fl = glob.glob(LnumLoc[0]+'/*MS')[0] # find example file
+        fl = glob.glob(LnumLoc[0]+'/*msdemix')[0] # find example file
         t = pt.table(fl+'::FIELD')
         Lnum = t.getcol('CODE')[0]
     os.mkdir(Lnum)
@@ -264,6 +265,8 @@ def extract_directions(calibrator):
     os.system(cmd)
 
 def _run_demix(location):
+    if location[-1] != '/':
+        location += '/'
     os.system(f'python3 {location}averageandemix.py {location}')
 
 def pre_init(location):
@@ -295,7 +298,7 @@ DDF.py --Data-ChunkHours=0.5 --Debug-Pdb=never --Parallel-NCPU=32 --Cache-Dir ./
         handle.write(second_cmd)
 
     
-def calibrator():
+def calibrator(flagstation=None):
     missinglist = find_missing_stations()
 
     mslist = sorted(glob.glob('*msdemix'))
@@ -321,8 +324,12 @@ def calibrator():
     if sourcename == '3C380':
         # I am so sorry for this line
         sourcename = '3c380'
+
+    if flagstation != None:
+        cmd = f'DPPP msin={outname} msout=. steps=[preflagger] preflagger.baseline="{flagstation}&&*"'
+        os.system(cmd)
     
-    cmd = f'''python {FACET_PIPELINE} --helperscriptspath={HELPER_SCRIPTS} --BLsmooth --ionfactor 0.02 --docircular --no-beamcor --skymodel={skymodel} --skymodelsource={sourcename} --soltype-list="['scalarphasediff','scalarphase','complexgain']" --solint-list="[4,1,8]" --nchan-list="[1,1,1]" --smoothnessconstraint-list="[0.6,0.3,1]" --imsize=4096 --uvmin=300 --stopafterskysolve --channelsout=24 --fitspectralpol=False --soltypecycles-list="[0,0,0]" --normamps=False --stop=1 --smoothnessreffrequency-list="[30.,20.,0.]" --doflagging=True --doflagslowphases=False --flagslowamprms=25 {input_concat}'''
+    cmd = f'''python {FACET_PIPELINE} --helperscriptspath={HELPER_SCRIPTS} --helperscriptspath-h5merge={H5_HELPER} --BLsmooth --ionfactor 0.02 --docircular --no-beamcor --skymodel={skymodel} --skymodelsource={sourcename} --soltype-list="['scalarphasediff','scalarphase','complexgain']" --solint-list="[4,1,8]" --nchan-list="[1,1,1]" --smoothnessconstraint-list="[0.6,0.3,1]" --imsize=4096 --uvmin=300 --stopafterskysolve --channelsout=24 --fitspectralpol=False --soltypecycles-list="[0,0,0]" --normamps=False --stop=1 --smoothnessreffrequency-list="[30.,20.,0.]" --doflagging=True --doflagslowphases=False --flagslowamprms=25 {input_concat}'''
     print(cmd)
     os.system(cmd)   
 
@@ -390,7 +397,7 @@ def consolidated_target(target):
     os.system('mv ../phaseshifted_* .')
     generate_boxfile(target)
     # The following line uses a wildcard statement to glob all phaseshifted measurement sets
-    cmd = f'''python {FACET_PIPELINE} --helperscriptspath {HELPER_SCRIPTS} --pixelscale 8 -b boxfile.reg --antennaconstraint="['core',None]" --BLsmooth --ionfactor 0.02 --docircular --startfromtgss --soltype-list="['scalarphasediffFR','tecandphase']" --solint-list="[24,1]" --nchan-list="[1,1]" --smoothnessconstraint-list="[1.0,0.0]" --uvmin=300 --channelsout=24 --fitspectralpol=False --soltypecycles-list="[0,0]" --normamps=False --stop=5 --smoothnessreffrequency-list="[30.,0]" --doflagging=True --doflagslowphases=False --flagslowamprms=25 phaseshifted_*'''
+    cmd = f'''python {FACET_PIPELINE} --helperscriptspath {HELPER_SCRIPTS} --helperscriptspath-h5merge={H5_HELPER} --pixelscale 8 -b boxfile.reg --antennaconstraint="['core',None]" --BLsmooth --ionfactor 0.02 --docircular --startfromtgss --soltype-list="['scalarphasediffFR','tecandphase']" --solint-list="[24,1]" --nchan-list="[1,1]" --smoothnessconstraint-list="[1.0,0.0]" --uvmin=300 --channelsout=24 --fitspectralpol=False --soltypecycles-list="[0,0]" --normamps=False --stop=5 --smoothnessreffrequency-list="[30.,0]" --doflagging=True --doflagslowphases=False --flagslowamprms=25 phaseshifted_*'''
     print(cmd)
     os.system(cmd)   
 
@@ -523,6 +530,7 @@ if __name__ == "__main__":
     parse.add_argument('--demix', '--prerun',action = 'store_true', help='Do this if the folder contains raw .tar files instead of demixed folders. Untarring has to happen on the node itself - so from a performance POV this might not be a good choice.')
     parse.add_argument('--delete_files', action='store_true', help='Deletes files after running the pipelne. Only recommended for the calibrator pipeline!')
     parse.add_argument('--pipeline', help='Pipeline of choice', choices=['DD','DI_target','DI_calibrator','DDF','full'])
+    parse.add_argument('--flag_station', help='Flags these stations, particularly handy for the calibrator pipeline', default=None)
     parse.add_argument('-d','--debug', help='Debugging option, please don\'t touch',action='store_true')
 
     res = parse.parse_args()
@@ -531,8 +539,6 @@ if __name__ == "__main__":
     # Check here if the input is valid
         if len(res.cal_H5)!=len(res.location) and res.pipeline=='DI_target':
             raise ValueError('Must give as many calibrator files as MS locations when running the DI pipeline')
-    if len(res.location)>1 and res.pipeline=='DI_calibrator':
-        raise ValueError('Only use 1 measurement for the calibrator pipeline')
     if res.delete_files and res.pipeline!='DI_calibrator':
         raise ValueError('Deleting files automatically is currently only supported for the DI calibrator pipeline.')
 
@@ -566,8 +572,11 @@ if __name__ == "__main__":
             pre_init(loc)
 
     if res.pipeline=='DI_calibrator':
-        initrun(location)
-        calibrator()
+        for loc in location:
+            initrun(location)
+            calibrator(res.flag_station)
+            lastwd = os.getcwd()
+            os.chdir('..')
     elif res.pipeline=='DD':
         # This step doesn't necessarily need a target
         dd_pipeline(location,res.boxes,res.nthreads,res.direction)
@@ -596,9 +605,10 @@ if __name__ == "__main__":
 
     if res.delete_files and res.pipeline == 'DI_calibrator':
         # Delete measurement sets. This should be the bulk anyways...
+        os.chdir(lastwd)
         os.system('rm -rf *msdemix')
-        os.system('rm -rf *.split')
-        os.system('rm -rf *corr')
+        os.system('rm -rf *.split.ms')
+        os.system('rm -rf *corr.ms')
         os.mkdir('FITSimages')
         os.system('mv *fits FITSimages')
         pass
