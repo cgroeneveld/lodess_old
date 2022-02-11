@@ -298,13 +298,13 @@ DDF.py --Data-ChunkHours=0.5 --Debug-Pdb=never --Parallel-NCPU=32 --Cache-Dir ./
         handle.write(second_cmd)
 
     
-def calibrator(flagstation=None):
+def calibrator(flagstation=None,nthreads=6):
     missinglist = find_missing_stations()
 
     mslist = sorted(glob.glob('*msdemix'))
     comblist = [(ms,missinglist) for ms in mslist]
-    for c in comblist:
-        run(c)
+    pl = mp.Pool(nthreads)
+    pl.map(run,comblist)
 
     msnames = glob.glob('*corr*')
     msname = msnames[2].split('SB')[0]
@@ -333,7 +333,7 @@ def calibrator(flagstation=None):
     print(cmd)
     os.system(cmd)   
 
-def individual_target(Lnum,calfile,target):
+def individual_target(Lnum,calfile,target,nthreads=6):
     '''
         This runs the individual target part of the pipeline
         splits up the data in individual runs
@@ -349,8 +349,8 @@ def individual_target(Lnum,calfile,target):
 
     mslist = sorted(glob.glob('*msdemix'))
     comblist = [(ms,missinglist) for ms in mslist]
-    for c in comblist:
-        run(c)
+    pl = mp.Pool(nthreads)
+    pl.map(run,comblist)
 
     msnames = glob.glob('*corr*')
     msname = msnames[2].split('SB')[0]
@@ -427,7 +427,7 @@ def consolidated_target(target):
     extract_directions(target)
     os.system(f'python split_rectangles.py regions_ws1.reg')
 
-def target(calfiles,target):
+def target(calfiles,target,nthreads):
     '''
         DI Target pipeline V2.0
         Works for multiple runs of the same pointing
@@ -441,7 +441,7 @@ def target(calfiles,target):
     
     # Run the individual pipeline for each L number separately
     for Lnum,calfile in zip(Lnums_unique,calfiles):
-        individual_target(Lnum,calfile,target)
+        individual_target(Lnum,calfile,target,nthreads)
     
     # Run the consolidated pipeline for all files
     consolidated_target(target)
@@ -574,9 +574,11 @@ if __name__ == "__main__":
     if res.pipeline=='DI_calibrator':
         for loc in location:
             initrun(location)
-            calibrator(res.flag_station)
-            lastwd = os.getcwd()
+            calibrator(res.flag_station,res.nthreads)
+            lastwd = os.path.abspath(os.getcwd())
             os.chdir('..')
+        print('----------------')
+        print(lastwd)
     elif res.pipeline=='DD':
         # This step doesn't necessarily need a target
         dd_pipeline(location,res.boxes,res.nthreads,res.direction)
@@ -584,7 +586,7 @@ if __name__ == "__main__":
         # This step absolutely needs a target
         calfiles_abs = [os.path.abspath(calfile) for calfile in res.cal_H5]
         initrun(location)
-        target(calfiles_abs,res.direction)
+        target(calfiles_abs,res.direction,res.nthreads)
     elif res.pipeline=='DDF':
         DDF_pipeline(location,res.direction)
     elif res.pipeline=='full':
@@ -611,4 +613,3 @@ if __name__ == "__main__":
         os.system('rm -rf *corr.ms')
         os.mkdir('FITSimages')
         os.system('mv *fits FITSimages')
-        pass
