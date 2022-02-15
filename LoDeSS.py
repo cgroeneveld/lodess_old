@@ -148,34 +148,62 @@ def generate_boxfile(direction):
 def find_rms(thres = 0.002):
     '''
         Run this in the DD_cal directory. Iterates through all the run_X folders,
-        finds the measurement sets and computes the 
+        finds the measurement sets and computes the snr
     '''
     import runwsclean as runw
     msses = glob.glob('run*/direction*/Dir*ms')
-    msnames = [ms.split('/')[-1].split('.')[0] for ms in msses]
-    msnums = [int(ms.split('Dir')[-1]) for ms in msnames]
+    msfullnames = [ms.split('/')[-1] for ms in msses]
+    if len(msfullnames[0].split('.')) == 4:
+        # Multiple MS per facet
+        msnames = ['.'.join(ms.split('.')[:2]) for ms in msfullnames]
+        msnums = [float(ms.split('Dir')[-1]) for ms in msnames]
+        mstextnums = [ms.split('Dir')[-1] for ms in msnames] # Important for conserving the "0" case (or "10" case, for that matter...)
+        msfirstnums = [int(str(num).split('.')[0]) for num in msnums]
+    else:
+        msnames = [ms.split('/')[-1].split('.')[0] for ms in msses]
+        msnums = [int(ms.split('Dir')[-1]) for ms in msnames]
+        mstextnums = msnums # Doesn't matter if there is only one measurement set...
+        msfirstnums = msnums  # Doesn't matter if there is only one measurement set...
+
     sorting = np.argsort(msnums)
 
     msses = np.array(msses)[sorting]
     msnames = np.array(msnames)[sorting]
     msnums = np.array(msnums)[sorting]
+    msfirstnums = np.array(msfirstnums)[sorting]
+    mstextnums = np.array(mstextnums)[sorting]
 
     snrs = []
+    thresholds = [] 
     for ms,msname in zip(msses,msnames):
+        noise,flux,_,__ = runw.getmsmodelinfo(ms,'MODEL_DATA',fastrms=True)
         try:
             noise,flux,_,__ = runw.getmsmodelinfo(ms,'MODEL_DATA',fastrms=True)
             snr = flux/noise
             snrs.append(snr)
         except:
             snrs.append(np.nan)
+        t = pt.table(ms).getcol('TIME')
+        duration = t[-1] - t[0]
+        thresholds.append(thres* np.sqrt(duration)/np.sqrt(18000)) # SNR scales naturally as sqrt(t), and we use 0.002 as reference
     
     snrs = np.array(snrs)
-    toreject = np.where(snrs < thres)[0]
+    toreject = np.where(snrs < thresholds)[0]
+    
     os.chdir('RESULTS')
     os.mkdir('rejected')
     for torej in toreject:
+        firstnum = msfirstnums[torej]
+        where_firstnum = np.where(msfirstnums==firstnum)[0]
+        toremove = mstextnums[where_firstnum]
         num = msnums[torej]
-        os.system(f'mv h5files/direction{num}.h5 rejected/direction{num}.h5')
+        print('Removing: ')
+        print(', '.join(toremove))
+        print('__________________________')
+
+        for torem in toremove:
+            os.system(f'mv h5files/direction{torem}.h5 rejected/direction{torem}.h5')
+    # TODO: make sure that BOTH h5s are deleted if only one is deleted
     os.chdir('../')
 
 def run(comb):
@@ -285,15 +313,19 @@ def pre_init(location):
         proc.join()
 
 def generate_ddf_bashfile(msname):
+    mslist = glob.glob('*ms')
+    if len(mslist) > 1:
+        # Multiple measurements
+        msname = ','.join(glob.glob('*ms'))
     base_cmd = f'''export NUMEXPR_MAX_THREADS=96
 echo $NUMEXPR_MAX_THREADS
-DDF.py --Data-ChunkHours=0.5 --Debug-Pdb=never --Parallel-NCPU=32 --Cache-Dir ./ --Data-MS {msname} --Data-ColName DATA --Data-Sort 1 --Output-Mode Clean --Deconv-CycleFactor 0 --Deconv-MaxMinorIter 1000000 --Deconv-RMSFactor 2.0 --Deconv-FluxThreshold 0.0 --Deconv-Mode HMP --HMP-AllowResidIncrease 1.0 --Weight-Robust -0.5 --Image-NPix 8192 --CF-wmax 50000 --CF-Nw 100 --Beam-CenterNorm 1 --Beam-Smooth 1 --Beam-Model LOFAR --Beam-LOFARBeamMode A --Beam-NBand 1 --Beam-DtBeamMin 5 --Output-Also onNeds --Image-Cell 8.0 --Freq-NDegridBand 7 --Freq-NBand 7 --Mask-Auto 1 --Mask-SigTh 2.0 --GAClean-MinSizeInit 10 --GAClean-MaxMinorIterInitHMP 100000 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Weight-ColName WEIGHT_SPECTRUM --Output-Name run1 --DDESolutions-DDModeGrid AP --DDESolutions-DDModeDeGrid AP --RIME-ForwardMode BDA-degrid --Output-RestoringBeam 45.0 --DDESolutions-DDSols merged.h5:sol000/phase000+amplitude000 --Deconv-MaxMajorIter 8 --Deconv-PeakFactor 0.005 --Cache-Reset 1 #>> ddfacet-c0.log 2>&'''
+DDF.py --Data-ChunkHours=0.5 --Debug-Pdb=never --Parallel-NCPU=32 --Cache-Dir ./ --Data-MS {msname} --Data-ColName DATA --Data-Sort 1 --Output-Mode Clean --Deconv-CycleFactor 0 --Deconv-MaxMinorIter 1000000 --Deconv-RMSFactor 2.0 --Deconv-FluxThreshold 0.0 --Deconv-Mode HMP --HMP-AllowResidIncrease 1.0 --Weight-Robust -0.5 --Image-NPix 8192 --CF-wmax 50000 --CF-Nw 100 --Beam-CenterNorm 1 --Beam-Smooth 1 --Beam-Model LOFAR --Beam-LOFARBeamMode A --Beam-NBand 1 --Beam-DtBeamMin 5 --Output-Also onNeds --Image-Cell 8.0 --Freq-NDegridBand 7 --Freq-NBand 7 --Mask-Auto 1 --Mask-SigTh 2.0 --GAClean-MinSizeInit 10 --GAClean-MaxMinorIterInitHMP 100000 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Weight-ColName WEIGHT_SPECTRUM --Output-Name run1 --DDESolutions-DDModeGrid AP --DDESolutions-DDModeDeGrid AP --RIME-ForwardMode BDA-degrid --Output-RestoringBeam 45.0 --DDESolutions-DDSols merged.*h5:sol000/phase000+amplitude000 --Deconv-MaxMajorIter 8 --Deconv-PeakFactor 0.005 --Cache-Reset 1 #>> ddfacet-c0.log 2>&'''
     with open('cmd1.sh','w') as handle:
         handle.write(base_cmd)
     
     second_cmd = f'''export NUMEXPR_MAX_THREADS=96
 echo $NUMEXPR_MAX_THREADS
-DDF.py --Data-ChunkHours=0.5 --Debug-Pdb=never --Parallel-NCPU=32 --Cache-Dir ./ --Mask-External=run1.int.restored.fits.mask.fits --Predict-InitDicoModel=run1.01.DicoModel --Data-MS {msname} --Data-ColName DATA --Data-Sort 1 --Output-Mode Clean --Deconv-CycleFactor 0 --Deconv-MaxMinorIter 1000000 --Deconv-RMSFactor 2.0 --Deconv-FluxThreshold 0.0 --Deconv-Mode HMP --HMP-AllowResidIncrease 1.0 --Weight-Robust -0.5 --Image-NPix 8192 --CF-wmax 50000 --CF-Nw 100 --Beam-CenterNorm 1 --Beam-Smooth 1 --Beam-Model LOFAR --Beam-LOFARBeamMode A --Beam-NBand 1 --Beam-DtBeamMin 5 --Output-Also onNeds --Image-Cell 8.0 --Freq-NDegridBand 7 --Freq-NBand 7 --Mask-Auto 1 --Mask-SigTh 2.0 --GAClean-MinSizeInit 10 --GAClean-MaxMinorIterInitHMP 100000 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Weight-ColName WEIGHT_SPECTRUM --Output-Name run2 --DDESolutions-DDModeGrid AP --DDESolutions-DDModeDeGrid AP --RIME-ForwardMode BDA-degrid --Output-RestoringBeam 45.0 --DDESolutions-DDSols merged.h5:sol000/phase000+amplitude000 --Deconv-MaxMajorIter 8 --Deconv-PeakFactor 0.005 --Cache-Reset 1 #>> ddfacet-c1.log 2>&'''
+DDF.py --Data-ChunkHours=0.5 --Debug-Pdb=never --Parallel-NCPU=32 --Cache-Dir ./ --Mask-External=run1.int.restored.fits.mask.fits --Predict-InitDicoModel=run1.01.DicoModel --Data-MS {msname} --Data-ColName DATA --Data-Sort 1 --Output-Mode Clean --Deconv-CycleFactor 0 --Deconv-MaxMinorIter 1000000 --Deconv-RMSFactor 2.0 --Deconv-FluxThreshold 0.0 --Deconv-Mode HMP --HMP-AllowResidIncrease 1.0 --Weight-Robust -0.5 --Image-NPix 8192 --CF-wmax 50000 --CF-Nw 100 --Beam-CenterNorm 1 --Beam-Smooth 1 --Beam-Model LOFAR --Beam-LOFARBeamMode A --Beam-NBand 1 --Beam-DtBeamMin 5 --Output-Also onNeds --Image-Cell 8.0 --Freq-NDegridBand 7 --Freq-NBand 7 --Mask-Auto 1 --Mask-SigTh 2.0 --GAClean-MinSizeInit 10 --GAClean-MaxMinorIterInitHMP 100000 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Weight-ColName WEIGHT_SPECTRUM --Output-Name run2 --DDESolutions-DDModeGrid AP --DDESolutions-DDModeDeGrid AP --RIME-ForwardMode BDA-degrid --Output-RestoringBeam 45.0 --DDESolutions-DDSols merged.*h5:sol000/phase000+amplitude000 --Deconv-MaxMajorIter 8 --Deconv-PeakFactor 0.005 --Cache-Reset 1 #>> ddfacet-c1.log 2>&'''
     with open('cmd2.sh','w') as handle:
         handle.write(second_cmd)
 
@@ -487,7 +519,7 @@ def DDF_pipeline(location,direction):
     os.system(f'cp -r {FACET_PIPELINE} runwsclean.py')
     os.chdir(location[0]) # Again, this should be the pointing name...
     if not os.path.isdir('DD_cal'):
-        print("You need to perform DD calibration before running the facet-imaging pipeline")
+        print("You need to perform DD calibration before running the facet-imaging pipeline. Also make sure that you are giving it the directory of the pointing (not the MS)")
         return 1
     else:
         pass
@@ -495,23 +527,43 @@ def DDF_pipeline(location,direction):
     os.system('python extract_results.py')
     find_rms()
 
-    cmd = f'python h5_merger.py -out merged.h5 -in RESULTS/h5files/* --ms run_0/direction0/Dir0.peel.ms '
-    if direction != None:
-        crdlist = direction.lstrip('[').rstrip(']').split(',')
-        crdlist = [crd.split('deg')[0] for crd in crdlist]
-        crd = SkyCoord(*crdlist,unit = (u.deg,u.deg))
-        radiancoord = str([crd.ra.to(u.radian).value,crd.dec.to(u.radian).value]).replace(' ','')
-        cmd += f'--add_direction {radiancoord}'
-    print(cmd)
-    os.system(cmd)
+    if len(glob.glob('RESULTS/h5files/direction*h5')[0].split('.')) == 3:
+        # multi ms
+        # do a merge run for each MS number
+        h5list = glob.glob('RESULTS/h5files/direction*h5')
+        nums = [h5.split('.')[1] for h5 in h5list]
+        n_max = np.max(np.array(nums,dtype=int))
+        for n in range(n_max + 1):
+            cmd = f'python h5_merger.py -out merged.{n}.h5 -in RESULTS/h5files/*.{n}.h5 --ms run_0/direction0/Dir0.{n}.peel.ms '
+            if direction != None:
+                crdlist = direction.lstrip('[').rstrip(']').split(',')
+                crdlist = [crd.split('deg')[0] for crd in crdlist]
+                crd = SkyCoord(*crdlist,unit = (u.deg,u.deg))
+                radiancoord = str([crd.ra.to(u.radian).value,crd.dec.to(u.radian).value]).replace(' ','')
+                cmd += f'--add_direction {radiancoord}'
+            print(cmd)
+            os.system(cmd)
+
+        pass
+    else:
+        # single ms
+        cmd = f'python h5_merger.py -out merged.h5 -in RESULTS/h5files/* --ms run_0/direction0/Dir0.peel.ms '
+        if direction != None:
+            crdlist = direction.lstrip('[').rstrip(']').split(',')
+            crdlist = [crd.split('deg')[0] for crd in crdlist]
+            crd = SkyCoord(*crdlist,unit = (u.deg,u.deg))
+            radiancoord = str([crd.ra.to(u.radian).value,crd.dec.to(u.radian).value]).replace(' ','')
+            cmd += f'--add_direction {radiancoord}'
+        print(cmd)
+        os.system(cmd)
 
     # now make facet imaging folder and generate the shell files
     msname = glob.glob('*ms')[0]
     os.chdir('../')
     os.mkdir('facet_imaging')
     os.chdir('facet_imaging')
-    os.system(f'cp -r ../DD_cal/merged.h5 .')
-    os.system(f'cp -r ../DD_cal/{msname} ./')
+    os.system(f'cp -r ../DD_cal/merged.*h5 .')
+    os.system(f'cp -r ../DD_cal/*ms ./')
     generate_ddf_bashfile(msname)
     
     # And now run the two DDF runs
