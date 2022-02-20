@@ -17,5 +17,5 @@ CHOUT = 12
 STOP  =  6
 
 peelnum = sys.argv[1]
-callstring = f"python {FACET_PIPELINE} -b Dir{peelnum}.reg --startfromtgss --usemodeldataforsolints --usewgridder True --channelsout={CHOUT} --stop={STOP} --uvmin=60 --docircular --BLsmooth Dir{peelnum}.*.peel.ms"
+callstring = f"python {FACET_PIPELINE} -b Dir{peelnum}.reg --skipbackup --startfromtgss --usemodeldataforsolints --usewgridder True --channelsout={CHOUT} --stop={STOP} --uvmin=60 --docircular --BLsmooth Dir{peelnum}.*.peel.ms"
 os.system(callstring)
