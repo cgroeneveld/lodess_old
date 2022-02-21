@@ -498,6 +498,11 @@ def dd_pipeline(location,boxes,nthreads,target):
     os.system(f'cp -r ../DI_image/image_000-????-model.fits .')
     os.system(f'cp -r ../DI_image/*ms .')
 
+    # See if any boxes are present, else raise an error
+    boxes_present = len(glob.glob('rectangles/*'))
+    if boxes_present < 1:
+        raise RuntimeError("No boxes are found. Are you sure ran the DI pipeline first - and if so, are you sure that it created any regions? Do that by hand, if necessary")
+
     spawn_delay = 3600 # == 1 hr
     threadlist = []
     for ii in range(nthreads):
