@@ -264,7 +264,6 @@ def initrun(LnumLoc):
         t = pt.table(fl+'::FIELD')
         Lnum = t.getcol('CODE')[0]
     os.mkdir(Lnum)
-    os.system(f'cp -r {glob.glob("*py")[0]} {Lnum}')
     os.system(f'cp -r /net/rijn/data2/groeneveld/largefiles/Band_PA.h5 {Lnum}')
     os.chdir(Lnum)
     for loc in LnumLoc:
