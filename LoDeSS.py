@@ -570,7 +570,7 @@ def DDF_pipeline(location,direction):
     os.chdir('../')
     os.mkdir('facet_imaging')
     os.chdir('facet_imaging')
-    os.system(f'cp -r {ROOT_FODLER}/DDF/make_mask.py .')
+    os.system(f'cp -r {ROOT_FOLDER}/DDF/make_mask.py .')
     os.system(f'cp -r ../DD_cal/merged.*h5 .')
     os.system(f'cp -r ../DD_cal/*ms ./')
     generate_ddf_bashfile(msname)
