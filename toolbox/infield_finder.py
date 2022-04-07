@@ -68,6 +68,7 @@ def detect_ateam(point):
 def fix_name(name):
     # I really hate that this is necessary. But well
     clist = ['8C','4C','3C']
+    print(name)
     for c in clist:
         if c in name:
             cataloglist = name.split(c)[1].split(' ')
@@ -77,10 +78,17 @@ def fix_name(name):
         for i in res:
             if '3C ' in i:
                 name = i
+    if 'NAME' in name:
+        name = name.split('NAME')[-1]
+    name = name.split('G')[0]
+    print(name)
     return name
 
 
 def on_pick(event):
+    '''
+        Find the nearest point; and show the relevant radio source from NED
+    '''
     artist = event.artist
     data = artist.get_offsets()
     # find brightest object near click
@@ -98,20 +106,36 @@ def on_pick(event):
     process_pointing(coord)
 
 def process_pointing(coord):
+    _new_name_res = True
     spectrum.clear()
-    simb = Simbad.query_region(coord,radius=2*u.arcmin)
-    namelist = simb['MAIN_ID']
-    # Order of precedence in the naming convention
-    namelist = list(filter(lambda x: '[' not in x, namelist)) # Prevent tagged names to 'clog up' the namelist
-    name = [namelist[0]]
-    name += list(filter(lambda x: "NVSS" in x,namelist))
-    name += list(filter(lambda x: "8C" in x,namelist))
-    name += list(filter(lambda x: "4C" in x,namelist))
-    name += list(filter(lambda x: "3C" in x,namelist))
-    name = name[-1]
-    print(name)
-    name = fix_name(name)
-    spectrum.set_title(name)
+    if not _new_name_res:
+        '''
+            Old name resolution
+        '''
+        simb = Simbad.query_region(coord,radius=4*u.arcmin)
+        print(simb)
+        namelist = simb['MAIN_ID']
+        # Order of precedence in the naming convention
+        namelist = list(filter(lambda x: '[' not in x, namelist)) # Prevent tagged names to 'clog up' the namelist
+        name = [namelist[0]]
+        name += list(filter(lambda x: "NVSS" in x,namelist))
+        name += list(filter(lambda x: "8C" in x,namelist))
+        name += list(filter(lambda x: "4C" in x,namelist))
+        name += list(filter(lambda x: "3C" in x,namelist))
+        name = name[-1]
+        name = fix_name(name)
+        print(name)
+        spectrum.set_title(name)
+    else:
+        '''
+            New name resolution
+        '''
+        nvss = Vizier.query_region(coord,catalog='VIII/65/nvss',radius=2*u.arcmin)
+        nvssname = 'NVSS J' + nvss[0][0]['NVSS']
+        name = Ned.query_object(nvssname)['Object Name'][0]
+        print(name)
+        spectrum.set_title(name)
+        name = nvssname
 
     res = Ned.get_table(name, table='photometry')
     freq = res['Frequency']
