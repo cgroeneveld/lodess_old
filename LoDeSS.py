@@ -606,7 +606,7 @@ if __name__ == "__main__":
         raise ValueError('Deleting files automatically is currently only supported for the DI calibrator pipeline.')
 
     location = res.location
-    call = ' '.join(sys.argv)
+    call = ' '.join(sys.argv).replace('(','"(').replace(')',')"')
     if not os.path.isfile('calls.log'):
         os.system('touch calls.log')
     with open('calls.log','a') as handle:
@@ -659,9 +659,9 @@ if __name__ == "__main__":
         #
         # PLEASE DO IT
         # Also note the two chdirs necessary for running this code properly
-        calfile_abs = os.path.abspath(res.cal_H5)
+        calfiles_abs = [os.path.abspath(calfile) for calfile in res.cal_H5]
         initrun(location)
-        target(calfile_abs,res.direction)
+        target(calfiles_abs,res.direction,res.nthreads)
         os.chdir("../") # Go back from extract_directions to main root
         wd = os.getcwd()
         dd_pipeline('./','./extract_directions/regions_ws1/',res.nthreads,None)
