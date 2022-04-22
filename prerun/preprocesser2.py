@@ -47,7 +47,7 @@ def process_lnum(tup):
     
 
 def main(args):
-    numthreads = 4
+    numthreads = 10
     pl = mp.Pool(numthreads)
     txtfile = args[1]
     data = []
