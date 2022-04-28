@@ -646,6 +646,11 @@ if __name__ == "__main__":
     # Check here if the input is valid
         if len(res.cal_H5)!=len(res.location) and res.pipeline=='DI_target':
             raise ValueError('Must give as many calibrator files as MS locations when running the DI pipeline')
+        calexists = np.array([os.path.isfile(cf) for cf in res.cal_H5])
+        if np.any(~calexists):
+            for ci,cf in enumerate(res.cal_H5):
+                if not calexists[ci]: print('calibrator file',cf,'is missing')
+            raise RuntimeError('Specified calibrator files missing')
         
     if res.delete_files and res.pipeline!='DI_calibrator':
         raise ValueError('Deleting files automatically is currently only supported for the DI calibrator pipeline.')
