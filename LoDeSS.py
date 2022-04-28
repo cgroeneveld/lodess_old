@@ -434,7 +434,9 @@ def consolidated_target(target):
     # The following line uses a wildcard statement to glob all phaseshifted measurement sets
     cmd = f'''python {FACET_PIPELINE} --helperscriptspath {HELPER_SCRIPTS} --helperscriptspathh5merge={H5_HELPER} --pixelscale 8 -b boxfile.reg --antennaconstraint="['core',None]" --BLsmooth --ionfactor 0.02 --docircular --startfromtgss --soltype-list="['scalarphasediffFR','tecandphase']" --solint-list="[24,1]" --nchan-list="[1,1]" --smoothnessconstraint-list="[1.0,0.0]" --uvmin=300 --channelsout=24 --fitspectralpol=False --soltypecycles-list="[0,0]" --normamps=False --stop=5 --smoothnessreffrequency-list="[30.,0]" --doflagging=True --doflagslowphases=False --flagslowamprms=25 phaseshifted_*'''
     print(cmd)
-    os.system(cmd)   
+    res = os.system(cmd)   
+    if res > 0:
+        raise RuntimeError('target selfcal has failed')
 
     # Make a direction independent image of the whole field
     os.chdir('..')
@@ -450,7 +452,9 @@ def consolidated_target(target):
     
     wscleancmd = f'wsclean -no-update-model-required -minuv-l 80.0 -size 8192 8192 -reorder -parallel-deconvolution 2048 -weight briggs -0.5 -weighting-rank-filter 3 -clean-border 1 -parallel-reordering 4 -mgain 0.8 -fit-beam -data-column DATA -padding 1.4 -join-channels -channels-out 8 -auto-mask 2.5 -auto-threshold 0.5 -pol i -baseline-averaging 2.396844981071314 -use-wgridder -name image_000 -scale 8.0arcsec -niter 150000 corrected_*'
     print(wscleancmd)
-    os.system(wscleancmd)
+    res = os.system(wscleancmd)
+    if res > 0:
+        raise RuntimeError('target di image has failed')
     os.chdir('..')
 
     # Make a guesstimate of the regions
