@@ -139,7 +139,7 @@ def add_dummyms(msfiles):
 def _run_sing(runname):
     cmd = f'python launch_run.py {runname}'
     print(cmd)
-    run_log(cmd)
+    run_cmd(cmd)
 
 def find_skymodel():
     measurementset = glob.glob('*msdemix')[2]
@@ -308,7 +308,7 @@ def initrun(LnumLoc):
         t = pt.table(fl+'::FIELD')
         Lnum = t.getcol('CODE')[0]
     os.mkdir(Lnum)
-    os.system(f'cp -r /net/rijn/data2/groeneveld/largefiles/Band_PA.h5 {Lnum}')
+    run_cmd(f'cp -r /net/rijn/data2/groeneveld/largefiles/Band_PA.h5 {Lnum}')
     os.chdir(Lnum)
     for loc in LnumLoc:
         if loc[0] == '/': #Absolute path
@@ -317,13 +317,13 @@ def initrun(LnumLoc):
             tocopy = glob.glob('../'+loc+'*msdemix')
         for cop in sorted(tocopy):
             print(f'Copying SB{cop.split("SB")[1][:3]}')
-            os.system(f'cp -r {cop} .')
+            run_cmd(f'cp -r {cop} .')
 
     target_source = find_skymodel()
     if target_source == '3c196':
-        os.system(f'cp -r /net/bovenrijn/data1/groeneveld/software/prefactor/skymodels/3C196-pandey.skymodel .')
+        run_cmd(f'cp -r /net/bovenrijn/data1/groeneveld/software/prefactor/skymodels/3C196-pandey.skymodel .')
     elif target_source == '3c380':
-        os.system(f'cp -r /net/bovenrijn/data1/groeneveld/software/prefactor/skymodels/3C380_8h_SH.skymodel 3C380-SH.skymodel')
+        run_cmd(f'cp -r /net/bovenrijn/data1/groeneveld/software/prefactor/skymodels/3C380_8h_SH.skymodel 3C380-SH.skymodel')
     print(target_source)
 
 def extract_directions(calibrator):
@@ -342,8 +342,8 @@ def _run_demix(location):
 
 def pre_init(location):
     ncpu = 4 # Be patient...
-    os.system(f'cp -r {ROOT_FOLDER}prerun/*py {location}')
-    os.system(f'cp -r {ROOT_FOLDER}prerun/demix.sourcedb {location}')
+    run_cmd(f'cp -r {ROOT_FOLDER}prerun/*py {location}')
+    run_cmd(f'cp -r {ROOT_FOLDER}prerun/demix.sourcedb {location}')
     demix_pool = []
 
     for i in range(ncpu):
@@ -410,7 +410,7 @@ def calibrator(flagstation=None,nthreads=6):
     
     cmd = f'''python {FACET_PIPELINE} --helperscriptspath={HELPER_SCRIPTS} --helperscriptspathh5merge={H5_HELPER} --BLsmooth --ionfactor 0.02 --docircular --no-beamcor --skymodel={skymodel} --skymodelsource={sourcename} --soltype-list="['scalarphasediff','scalarphase','complexgain']" --solint-list="[4,1,8]" --nchan-list="[1,1,1]" --smoothnessconstraint-list="[0.6,0.3,1]" --imsize=4096 --uvmin=300 --stopafterskysolve --channelsout=24 --fitspectralpol=False --soltypecycles-list="[0,0,0]" --normamps=False --stop=1 --smoothnessreffrequency-list="[30.,20.,0.]" --doflagging=True --doflagslowphases=False --flagslowamprms=25 {input_concat}'''
     print(cmd)
-    run_log(cmd,'calibrator_facetselfcal.log')   
+    run_cmd(cmd,log='calibrator_facetselfcal.log')   
 
 def individual_target(Lnum,calfile,target,nthreads=6):
     '''
@@ -420,10 +420,10 @@ def individual_target(Lnum,calfile,target,nthreads=6):
         calfile: abs path to calfile
     '''
     os.mkdir(Lnum)
-    os.system(f'mv {Lnum}*msdemix {Lnum}')
+    run_cmd(f'mv {Lnum}*msdemix {Lnum}')
     os.chdir(Lnum)
-    os.system(f'cp -r {calfile} calibrator.h5')
-    os.system(f'cp -r ../Band_PA.h5 .')
+    run_cmd(f'cp -r {calfile} calibrator.h5')
+    run_cmd(f'cp -r ../Band_PA.h5 .')
     missinglist = find_missing_stations()
 
     mslist = sorted(glob.glob('*msdemix'))
@@ -444,7 +444,7 @@ def individual_target(Lnum,calfile,target,nthreads=6):
     run_cmd(cmd)
 
     # Go to circular ...
-    os.system(f'cp -r {ROOT_FOLDER}lin2circ.py .')
+    run_cmd(f'cp -r {ROOT_FOLDER}lin2circ.py .')
     run_cmd(f'python lin2circ.py -i {outname} -c DATA -o DATA_CIRC')
 
     # Now, apply the calfile
@@ -458,7 +458,7 @@ def individual_target(Lnum,calfile,target,nthreads=6):
     # ... and go back to linear
 
     run_cmd(f'python lin2circ.py -i {outname} -c CALCORRECT_DATA_CIRC -b -l CALCORRECT_DATA')
-    os.system(f'cp -r {outname} ../')
+    run_cmd(f'cp -r {outname} ../')
 
     # Phaseshift to target+average
 
@@ -467,23 +467,23 @@ def individual_target(Lnum,calfile,target,nthreads=6):
     print(cmd)
     run_cmd(cmd)
 
-    os.system(f'cp -r phaseshifted_{outname} ../')
+    run_cmd(f'cp -r phaseshifted_{outname} ../')
     os.chdir('../') # Move back to main folder
 
 def consolidated_target(target):
     os.mkdir('target_cal')
     os.chdir('target_cal')
-    os.system('mv ../phaseshifted_* .')
+    run_cmd('mv ../phaseshifted_* .')
     generate_boxfile(target)
     # The following line uses a wildcard statement to glob all phaseshifted measurement sets
     cmd = f'''python {FACET_PIPELINE} --helperscriptspath {HELPER_SCRIPTS} --helperscriptspathh5merge={H5_HELPER} --pixelscale 8 -b boxfile.reg --antennaconstraint="['core',None]" --BLsmooth --ionfactor 0.02 --docircular --startfromtgss --soltype-list="['scalarphasediffFR','tecandphase']" --solint-list="[24,1]" --nchan-list="[1,1]" --smoothnessconstraint-list="[1.0,0.0]" --uvmin=300 --channelsout=24 --fitspectralpol=False --soltypecycles-list="[0,0]" --normamps=False --stop=5 --smoothnessreffrequency-list="[30.,0]" --doflagging=True --doflagslowphases=False --flagslowamprms=25 phaseshifted_*'''
     print(cmd)
-    run_log(cmd, 'target_di_facetselfcal')   
+    run_cmd(cmd, log='target_di_facetselfcal.log')   
 
     # Make a direction independent image of the whole field
     os.chdir('..')
     os.mkdir('DI_image')
-    os.system('cp -r target_cal/merged_selfcalcyle004* .') # Keep their original names - we know what form they are in
+    run_cmd('cp -r target_cal/merged_selfcalcyle004* .') # Keep their original names - we know what form they are in
     for outname in glob.glob('L*concat.ms'):
         cmd = f'DPPP msin={outname} msout=DI_image/corrected_{outname} msin.datacolumn=CALCORRECT_DATA_CIRC steps=[ac1,ac2] msout.writefullresflag=false msout.storagemanager=dysco '
         cmd += f'ac1.type=applycal ac1.parmdb=merged_selfcalcyle004_phaseshifted_{outname}.copy.h5 ac1.solset=sol000 ac1.correction=phase000 '
@@ -494,15 +494,15 @@ def consolidated_target(target):
     
     wscleancmd = f'wsclean -no-update-model-required -minuv-l 80.0 -size 8192 8192 -reorder -parallel-deconvolution 2048 -weight briggs -0.5 -weighting-rank-filter 3 -clean-border 1 -parallel-reordering 4 -mgain 0.8 -fit-beam -data-column DATA -padding 1.4 -join-channels -channels-out 8 -auto-mask 2.5 -auto-threshold 0.5 -pol i -baseline-averaging 2.396844981071314 -use-wgridder -name image_000 -scale 8.0arcsec -niter 150000 corrected_*'
     print(wscleancmd)
-    run_log(wscleancmd,'target_di_image')
+    run_cmd(wscleancmd,log='target_di_image.log')
     os.chdir('..')
 
     # Make a guesstimate of the regions
     os.mkdir('extract_directions')
     os.chdir('extract_directions')
-    os.system(f'cp -r ../DI_image/image_000-MFS-image.fits .')
-    os.system(f'cp -r {ROOT_FOLDER}DI/extract.py .')
-    os.system(f'cp -r {ROOT_FOLDER}DI/split_rectangles.py .')
+    run_cmd(f'cp -r ../DI_image/image_000-MFS-image.fits .')
+    run_cmd(f'cp -r {ROOT_FOLDER}DI/extract.py .')
+    run_cmd(f'cp -r {ROOT_FOLDER}DI/split_rectangles.py .')
     extract_directions(target)
     run_cmd(f'python split_rectangles.py regions_ws1.reg')
 
@@ -536,10 +536,10 @@ def dd_pipeline(location,boxes,nthreads,target):
     os.chdir(location[0]) # For now... but not really. This should be pointing to the name of the pointing
     os.mkdir('DD_cal')
     os.chdir('DD_cal')
-    os.system(f'cp -r {boxes} ./rectangles')
-    os.system(f'cp -r {ROOT_FOLDER}DD/* .')
-    os.system(f'cp -r ../DI_image/image_000-????-model.fits .')
-    os.system(f'cp -r ../DI_image/*ms .')
+    run_cmd(f'cp -r {boxes} ./rectangles')
+    run_cmd(f'cp -r {ROOT_FOLDER}DD/* .')
+    run_cmd(f'cp -r ../DI_image/image_000-????-model.fits .')
+    run_cmd(f'cp -r ../DI_image/*ms .')
 
     # See if any boxes are present, else raise an error
     boxes_present = len(glob.glob('rectangles/*'))
@@ -568,7 +568,7 @@ def DDF_pipeline(location,direction):
         make sure it rejects both h5s if one of the h5s is bad
         Also, make sure it gives two merged h5 files...
     '''
-    os.system(f'cp -r {FACET_PIPELINE} runwsclean.py')
+    run_cmd(f'cp -r {FACET_PIPELINE} runwsclean.py')
     os.chdir(location[0]) # Again, this should be the pointing name...
     if not os.path.isdir('DD_cal'):
         print("You need to perform DD calibration before running the facet-imaging pipeline. Also make sure that you are giving it the directory of the pointing (not the MS)")
@@ -614,17 +614,17 @@ def DDF_pipeline(location,direction):
     os.chdir('../')
     os.mkdir('facet_imaging')
     os.chdir('facet_imaging')
-    os.system(f'cp -r {ROOT_FOLDER}/DDF/make_mask.py .')
-    os.system(f'cp -r ../DD_cal/merged.*h5 .')
-    os.system(f'cp -r ../DD_cal/*ms ./')
+    run_cmd(f'cp -r {ROOT_FOLDER}/DDF/make_mask.py .')
+    run_cmd(f'cp -r ../DD_cal/merged.*h5 .')
+    run_cmd(f'cp -r ../DD_cal/*ms ./')
     generate_ddf_bashfile(msname)
     
     # And now run the two DDF runs
-    run_log('bash cmd1.sh','ddf_image1')
-    # os.system('MakeMask.py --RestoredIm run1.int.restored.fits --Th 3')
+    run_cmd('bash cmd1.sh',log='ddf_image1.log')
+    # run_cmd('MakeMask.py --RestoredIm run1.int.restored.fits --Th 3')
     # Run on the apparent image (flat noise)
     run_cmd('python make_mask.py -s run1.app.restored.fits -m run1mask.fits')
-    run_log('bash cmd2.sh','ddf_image2')
+    run_cmd('bash cmd2.sh',log='ddf_image2.log')
 
 
 if __name__ == "__main__":
