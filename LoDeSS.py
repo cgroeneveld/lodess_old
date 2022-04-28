@@ -599,9 +599,16 @@ if __name__ == "__main__":
     res = parse.parse_args()
 
     if res.cal_H5:
-    # Check here if the input is valid
+        # Check here if the input is valid
         if len(res.cal_H5)!=len(res.location) and res.pipeline=='DI_target':
             raise ValueError('Must give as many calibrator files as MS locations when running the DI pipeline')
+        # check that all the calibrator files are present and give a useful error if not
+        calexists = np.array([os.path.isfile(cali) for cali in res.cal_H5])
+        if np.any(~calexists):
+            for ci,cf in enumerate(res.cal_H5):
+                if not calexists[ci]: print('calibrator file',cf,'is missing')
+            raise ValueError('a specified calibrator file does not exist')
+        
     if res.delete_files and res.pipeline!='DI_calibrator':
         raise ValueError('Deleting files automatically is currently only supported for the DI calibrator pipeline.')
 
