@@ -256,13 +256,13 @@ def run(comb):
 def initrun(LnumLoc):
     # Fixed for multiple sources
 
-    if len(LnumLoc)==1:
-        Lnum = LnumLoc[0].split('/')[-2]
-    else:
-        lnums = [l.split('/')[-2] for l in LnumLoc]
-        fl = glob.glob(LnumLoc[0]+'/*msdemix')[0] # find example file
-        t = pt.table(fl+'::FIELD')
-        Lnum = t.getcol('CODE')[0]
+    lnums = [l.split('/')[-2] for l in LnumLoc]
+    fl = glob.glob(LnumLoc[0]+'/*msdemix')[0] # find example file
+    t = pt.table(fl+'::FIELD')
+    Lnum = t.getcol('CODE')[0]
+    if 'P' not in Lnum:
+        Lnum = LnumLoc[0].split('/')[-2] # Calibrator
+
     os.mkdir(Lnum)
     os.system(f'cp -r /net/rijn/data2/groeneveld/largefiles/Band_PA.h5 {Lnum}')
     os.chdir(Lnum)
