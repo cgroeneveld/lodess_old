@@ -668,8 +668,9 @@ if __name__ == "__main__":
             # Modify the direction string so it is a bit easier to use
             # convert it to the "normal way"
             resstring = res.direction
-            reslist = resstring.replace('(','').replace(')','').split(', ')
-            reslist = [i+'deg' for i in reslist]
+            resstring = resstring.replace(', ',',')
+            reslist = resstring.replace('(','').replace(')','').split(',')
+            reslist = [i.strip()+'deg' for i in reslist]
             new_restring = '[' + ','.join(reslist) + ']'
             res.direction = new_restring
             print('Reformatting direction to: '+res.direction)
