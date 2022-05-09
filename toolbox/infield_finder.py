@@ -188,6 +188,7 @@ if __name__ == "__main__":
     coords,fluxes = find_sources(crd,0.5*parser.fov*u.deg)
     pixels_positions = np.array([w.world_to_pixel(coordsel) for coordsel in coords]).T
     plt.scatter(pixels_positions[0],pixels_positions[1],c=fluxes,picker=10,label = 'VLSSR points')
+    plt.gca().invert_xaxis()
     cb = plt.colorbar()
     cb.set_label("Flux from VLSSR (Jy, @74MHz)")
 
