@@ -476,7 +476,7 @@ def consolidated_target(target):
     run_cmd('mv ../phaseshifted_* .')
     generate_boxfile(target)
     # The following line uses a wildcard statement to glob all phaseshifted measurement sets
-    cmd = f'''python {FACET_PIPELINE} --helperscriptspath {HELPER_SCRIPTS} --helperscriptspathh5merge={H5_HELPER} --pixelscale 8 -b boxfile.reg --antennaconstraint="['core',None]" --BLsmooth --ionfactor 0.02 --docircular --startfromtgss --soltype-list="['scalarphasediffFR','tecandphase']" --solint-list="[24,1]" --nchan-list="[1,1]" --smoothnessconstraint-list="[1.0,0.0]" --uvmin=300 --channelsout=24 --fitspectralpol=False --soltypecycles-list="[0,0]" --normamps=False --stop=5 --smoothnessreffrequency-list="[30.,0]" --doflagging=True --doflagslowphases=False --flagslowamprms=25 phaseshifted_*'''
+    cmd = f'''python {FACET_PIPELINE} --helperscriptspath {HELPER_SCRIPTS} --helperscriptspathh5merge={H5_HELPER} --makeimage-fullpol --pixelscale 8 -b boxfile.reg --antennaconstraint="['core',None]" --BLsmooth --ionfactor 0.02 --docircular --startfromtgss --soltype-list="['scalarphasediffFR','tecandphase']" --solint-list="[24,1]" --nchan-list="[1,1]" --smoothnessconstraint-list="[1.0,0.0]" --uvmin=300 --channelsout=24 --fitspectralpol=False --soltypecycles-list="[0,0]" --normamps=False --stop=5 --smoothnessreffrequency-list="[30.,0]" --doflagging=True --doflagslowphases=False --flagslowamprms=25 phaseshifted_*'''
     print(cmd)
     run_cmd(cmd, log='target_di_facetselfcal.log')   
 
@@ -492,12 +492,23 @@ def consolidated_target(target):
         run_cmd(cmd)
     os.chdir('DI_image')
     
-    wscleancmd = f'wsclean -no-update-model-required -minuv-l 80.0 -size 8192 8192 -reorder -parallel-deconvolution 2048 -weight briggs -0.5 -weighting-rank-filter 3 -clean-border 1 -parallel-reordering 4 -mgain 0.8 -fit-beam -data-column DATA -padding 1.4 -join-channels -channels-out 8 -auto-mask 2.5 -auto-threshold 0.5 -pol i -baseline-averaging 2.396844981071314 -use-wgridder -name image_000 -scale 8.0arcsec -niter 150000 corrected_*'
+    wscleancmd = f'wsclean -no-update-model-required -minuv-l 80.0 -size 8192 8192 -reorder -parallel-deconvolution 2048 -weight briggs -0.5 -weighting-rank-filter 3 -clean-border 1 -parallel-reordering 4 -mgain 0.8 -fit-beam -data-column DATA -padding 1.4 -join-channels -channels-out 8 -auto-mask 2.5 -auto-threshold 0.5 -pol iquv -baseline-averaging 2.396844981071314 -use-wgridder -name image_000 -scale 8.0arcsec -niter 150000 corrected_*'
     print(wscleancmd)
     run_cmd(wscleancmd,log='target_di_image.log')
-    os.chdir('..')
+
+    # Put all iquvs in a different folder 
+    os.mkdir('pol')
+    for pol in 'QUV':
+        run_cmd(f'mv image*-{pol}*.fits pol/')
+    
+    # Rename Stokes-I image
+    stokes_I_images = glob.glob("image_*-I-*fits")
+    for oldimg in stokes_I_images:
+        newimg = ('-').join(oldimg.split('-I-'))
+        run_cmd(f'mv {oldimg} {newimg}')
 
     # Make a guesstimate of the regions
+    os.chdir('..')
     os.mkdir('extract_directions')
     os.chdir('extract_directions')
     run_cmd(f'cp -r ../DI_image/image_000-MFS-image.fits .')
