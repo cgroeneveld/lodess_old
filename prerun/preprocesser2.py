@@ -24,7 +24,7 @@ def process_lnum(tup):
     while np.sum(np.array(succesful)) < len(links): # Still files to be processed...
         todo = np.logical_not(np.array(succesful,dtype=bool))
         selected_links = np.array(links)[todo]
-        commands = [f'wget -c --timeout=10 --tries=15 "{name}"' for name in selected_links]
+        commands = [f'wget -c --timeout=20 --tries=360 "{name}"' for name in selected_links]
         for com in commands:
             os.system(com)
         
@@ -32,7 +32,9 @@ def process_lnum(tup):
             try:
                 name = glob.glob(f'*{sb}*tar')[0]
                 call = f'tar --force-local -xvf {name}'
-                os.system(call)
+                retval = os.system(call)
+                if retval != 0:
+                    raise ValueError("Not a valid tarball")
                 index = np.where(np.array(sbnums) == sb)[0][0]
                 succesful[index] = True
                 os.remove(name)

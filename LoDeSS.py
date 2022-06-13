@@ -36,6 +36,7 @@ ROOT_FOLDER = '/net/rijn/data2/groeneveld/LoDeSS_files/'
 HELPER_SCRIPTS = '/net/rijn/data2/groeneveld/LoDeSS_files/lofar_facet_selfcal/'
 FACET_PIPELINE = ROOT_FOLDER + 'lofar_facet_selfcal/facetselfcal.py'
 H5_HELPER = '/net/rijn/data2/groeneveld/lofar_helpers/'
+SKYMODELS = ROOT_FOLDER + 'skymodels/'
 
 def run_cmd(s,proceed=False,dryrun=False,log=None,quiet=False):
     '''modified from ddf-pipeline
@@ -321,9 +322,9 @@ def initrun(LnumLoc):
 
     target_source = find_skymodel()
     if target_source == '3c196':
-        run_cmd(f'cp -r /net/bovenrijn/data1/groeneveld/software/prefactor/skymodels/3C196-pandey.skymodel .')
+        run_cmd(f'cp -r {SKYMODELS}3C196-pandey.skymodel .')
     elif target_source == '3c380':
-        run_cmd(f'cp -r /net/bovenrijn/data1/groeneveld/software/prefactor/skymodels/3C380_8h_SH.skymodel 3C380-SH.skymodel')
+        run_cmd(f'cp -r {SKYMODELS}3C380_8h_SH.skymodel 3C380-SH.skymodel')
     print(target_source)
 
 def extract_directions(calibrator):
