@@ -26,6 +26,10 @@
           x --circlerad  :  the radius of the "guiding" circle that helps you with finding the best calibrator sources.
 """
 
+import warnings
+from astropy.utils.exceptions import AstropyDeprecationWarning
+warnings.simplefilter('ignore',AstropyDeprecationWarning)
+
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -50,7 +54,9 @@ targets = [ {'name' : 'CasA', 'ra' : 6.123487680622104,  'dec' : 1.0265153995604
             {'name' : 'VirA', 'ra' : 3.276086511413598,  'dec' : 0.21626589533567378},
             {'name' : 'HydraA', 'ra' : 2.4352, 'dec' : -0.21099}]
 
+
 current_point = []
+
 
 def detect_ateam(point):
     for target in targets:
