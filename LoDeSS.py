@@ -342,7 +342,7 @@ def _run_demix(location):
     run_cmd(f'python3 {location}averageandemix.py {location}')
 
 def pre_init(location):
-    ncpu = 4 # Be patient...
+    ncpu = 6 # Be patient...
     run_cmd(f'cp -r {ROOT_FOLDER}prerun/*py {location}')
     run_cmd(f'cp -r {ROOT_FOLDER}prerun/demix.sourcedb {location}')
     demix_pool = []
