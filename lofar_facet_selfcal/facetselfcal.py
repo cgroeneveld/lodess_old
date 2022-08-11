@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 
+# normamps full jones, deal with solnorm on crosshands only? currently normaps not used for fulljones
+
 # implement idea of phase detrending.
-# exit in a clean way if no clean components are found....
 # do not use os.system for DP3/WSClean to catch errors properly
 # decrease niter if multiscale is triggered, smart move?
-# linear to circular solution conversion
+# h5 linear to circular solution conversion
 # do not predict sky second time in pertubation solve?
 # to do: log command into the FITS header
-# solnorm fulljones fix? is very tricky....
-# fulljones flagging and medamps not working correctly
 # avg to units of Hertz and seconds? (for input data that hass different averaging)
 # BLsmooth not for gain solves opttion
 # BLsmooth constant smooth for gain solves
@@ -48,7 +47,7 @@ import bdsf
 import pyregion
 import argparse
 import pickle
-
+import magic
 import fnmatch
 import tables
 from astropy.io import ascii
@@ -554,13 +553,12 @@ def reset_gains_noncore(h5parm, keepanntennastr='CS'):
 #reset_gains_noncore('merged_selfcalcyle11_testquick260.ms.avg.h5')
 #sys.exit()
 
-def phaseup(msinlist,datacolumn='DATA',superstation='core', parmdbmergelist=None):
+def phaseup(msinlist,datacolumn='DATA',superstation='core', parmdbmergelist=None, start=0):
   msoutlist = []
   for ms in msinlist:
     msout=ms + '.phaseup'
     msoutlist.append(msout)
-    if os.path.isdir(msout):
-      os.system('rm -rf ' + msout)
+
     cmd = "DP3 msin=" + ms + " msout.storagemanager=dysco steps=[add,filter] msout.writefullresflag=False "
     cmd += "msout=" + msout + " msin.datacolumn=" + datacolumn + " "
     cmd += "filter.type=filter filter.remove=True "
@@ -570,8 +568,11 @@ def phaseup(msinlist,datacolumn='DATA',superstation='core', parmdbmergelist=None
     if superstation == 'superterp':
       cmd += "add.stations={ST001:'CS00[2-7]*'} filter.baseline='!CS00[2-7]*&&*' "  
 
-    print(cmd)
-    os.system(cmd)
+    if start == 0: # only phaseup if start selfcal from cycle 0, so skip for a restart
+      if os.path.isdir(msout):
+        os.system('rm -rf ' + msout)
+      print(cmd)
+      os.system(cmd)
   
   return msoutlist
 
@@ -1845,31 +1846,12 @@ def archive(mslist, outtarname, regionfile, fitsmask, imagename):
   return
 
 
-#def reweight(mslist, pixsize, imsize, channelsout, niter, robust, multiscale=False, fitsmask=None):
-   #"""
-   #determine the solution time and frequency intervals based on the amount of compact source flux
-   #"""
-   
-   #rmslist = []
-
-   #logger.info('Adjusting weights')
-
-   #for ms in mslist:
-          #imageout =  'rmsimage' + ms.split('.ms')[0] 
-          #makeimage([ms], imageout, pixsize, imsize, channelsout, np.int(niter/(len(mslist)**(1./3.))), robust, multiscale=multiscale, predict=False,fitsmask=fitsmask)
-          
-          #hdulist = fits.open(imageout + '-MFS-image.fits')
-          #imagenoise = findrms(np.ndarray.flatten(hdulist[0].data))
-          #hdulist.close() 
-          #rmslist.append(imagenoise)
-          
-   #weightslist = []       
-   #return 
 
 
 def setinitial_solint(mslist, soltype_list, longbaseline, LBA,\
                       innchan_list, insolint_list, insmoothnessconstraint_list, \
-                      insmoothnessreffrequency_list, inantennaconstraint_list, \
+                      insmoothnessreffrequency_list, insmoothnessspectralexponent_list,\
+                      inantennaconstraint_list, \
                       insoltypecycles_list):
    """
    take user input solutions,nchan,smoothnessconstraint,antennaconstraint and expand them to all ms
@@ -1898,6 +1880,10 @@ def setinitial_solint(mslist, soltype_list, longbaseline, LBA,\
       f = open('smoothnessreffrequency.p', 'rb') 
       smoothnessreffrequency_list = pickle.load(f)        
       f.close()
+      
+      f = open('smoothnessspectralexponent.p', 'rb')
+      smoothnessspectralexponent_list = pickle.load(f)
+      f.close()
 
       f = open('soltypecycles.p', 'rb') 
       soltypecycles_list = pickle.load(f)        
@@ -1907,10 +1893,11 @@ def setinitial_solint(mslist, soltype_list, longbaseline, LBA,\
    else:
       nchan_list  = [] # list with len(soltype_list)
       solint_list = [] # list with len(soltype_list)
-      smoothnessconstraint_list = [] # nested list with len(soltype_list), inner list is for ms)
-      smoothnessreffrequency_list = [] # nested list with len(soltype_list), inner list is for ms)
-      antennaconstraint_list = [] # nested list with len(soltype_list), inner list is for ms)
-      soltypecycles_list = []  # nested list with len(soltype_list), inner list is for ms)
+      smoothnessconstraint_list = [] # nested list with len(soltype_list), inner list is for ms
+      smoothnessreffrequency_list = [] # nested list with len(soltype_list), inner list is for ms
+      smoothnessspectralexponent_list = [] # nest list with len(soltype_list), inner list is for ms
+      antennaconstraint_list = [] # nested list with len(soltype_list), inner list is for ms
+      soltypecycles_list = []  # nested list with len(soltype_list), inner list is for ms
 
       for soltype_id, soltype in enumerate(soltype_list):
         nchan_ms   = [] # list with len(mslist)
@@ -1918,6 +1905,7 @@ def setinitial_solint(mslist, soltype_list, longbaseline, LBA,\
         antennaconstraint_list_ms   = [] # list with len(mslist)
         smoothnessconstraint_list_ms  = [] # list with len(mslist)
         smoothnessreffrequency_list_ms  = [] # list with len(mslist)
+        smoothnessspectralexponent_list_ms = [] # list with len(mslist)
         soltypecycles_list_ms = [] # list with len(mslist)
 
         for ms in mslist:
@@ -1946,7 +1934,13 @@ def setinitial_solint(mslist, soltype_list, longbaseline, LBA,\
             smoothnessreffrequency = insmoothnessreffrequency_list[soltype_id]
           except:
             smoothnessreffrequency = 0.0
-            
+          
+          # smoothnessspectralexponent 
+          try:
+            smoothnessspectralexponent = insmoothnessspectralexponent_list[soltype_id]
+          except:
+            smoothnessspectralexponent = -1.0          
+          
           # antennaconstraint 
           try:
             antennaconstraint = inantennaconstraint_list[soltype_id]
@@ -1965,6 +1959,7 @@ def setinitial_solint(mslist, soltype_list, longbaseline, LBA,\
           solint_ms.append(solint)
           smoothnessconstraint_list_ms.append(smoothnessconstraint)
           smoothnessreffrequency_list_ms.append(smoothnessreffrequency)
+          smoothnessspectralexponent_list_ms.append(smoothnessspectralexponent)
           antennaconstraint_list_ms.append(antennaconstraint)
           soltypecycles_list_ms.append(soltypecycles)
 
@@ -1974,6 +1969,7 @@ def setinitial_solint(mslist, soltype_list, longbaseline, LBA,\
         antennaconstraint_list.append(antennaconstraint_list_ms)   # list of lists
         smoothnessconstraint_list.append(smoothnessconstraint_list_ms) # list of lists
         smoothnessreffrequency_list.append(smoothnessreffrequency_list_ms) # list of lists
+        smoothnessspectralexponent_list.append(smoothnessspectralexponent_list_ms) # list of lists
         
         soltypecycles_list.append(soltypecycles_list_ms)
 
@@ -1992,6 +1988,10 @@ def setinitial_solint(mslist, soltype_list, longbaseline, LBA,\
       f = open('smoothnessreffrequency.p', 'wb') 
       pickle.dump(smoothnessreffrequency_list,f)        
       f.close()  
+
+      f = open('smoothnessspectralexponent.p', 'wb') 
+      pickle.dump(smoothnessspectralexponent_list,f)        
+      f.close()  
       
       f = open('antennaconstraint.p', 'wb') 
       pickle.dump(antennaconstraint_list,f)        
@@ -2007,6 +2007,7 @@ def setinitial_solint(mslist, soltype_list, longbaseline, LBA,\
    print('solint:',solint_list)
    print('smoothnessconstraint:',smoothnessconstraint_list)
    print('smoothnessreffrequency:',smoothnessreffrequency_list)
+   print('smoothnessspectralexponent:',smoothnessspectralexponent_list)
    print('antennaconstraint:',antennaconstraint_list)
    print('soltypecycles:',soltypecycles_list)
 
@@ -2015,10 +2016,11 @@ def setinitial_solint(mslist, soltype_list, longbaseline, LBA,\
    logger.info('solint: ' + str(insolint_list))
    logger.info('smoothnessconstraint: ' + str(insmoothnessconstraint_list))
    logger.info('smoothnessreffrequency: ' + str(insmoothnessreffrequency_list))
+   logger.info('smoothnessspectralexponent: ' + str(insmoothnessspectralexponent_list))
    logger.info('antennaconstraint: ' + str(inantennaconstraint_list))
    logger.info('soltypecycles: ' + str(insoltypecycles_list))   
    
-   return nchan_list, solint_list, smoothnessconstraint_list, smoothnessreffrequency_list, antennaconstraint_list, soltypecycles_list
+   return nchan_list, solint_list, smoothnessconstraint_list, smoothnessreffrequency_list, smoothnessspectralexponent_list, antennaconstraint_list, soltypecycles_list
 
 def getmsmodelinfo(ms, modelcolumn, fastrms=False, uvcutfraction=0.333):
    t = pt.table(ms + '/SPECTRAL_WINDOW')
@@ -2099,6 +2101,7 @@ def auto_determinesolints(mslist, soltype_list, longbaseline, LBA,\
                           innchan_list=None, insolint_list=None,\
                           uvdismod=None, modelcolumn='MODEL_DATA', redo=False,\
                           insmoothnessconstraint_list=None, insmoothnessreffrequency_list=None, \
+                          insmoothnessspectralexponent_list=None,\
                           inantennaconstraint_list=None, \
                           insoltypecycles_list=None, tecfactorsolint=1.0, gainfactorsolint=1.0,\
                           phasefactorsolint=1.0, delaycal=False):
@@ -2393,6 +2396,10 @@ def auto_determinesolints(mslist, soltype_list, longbaseline, LBA,\
    f = open('smoothnessreffrequency.p', 'wb') 
    pickle.dump(insmoothnessreffrequency_list,f)        
    f.close()   
+
+   f = open('smoothnessspectralexponent.p', 'wb') 
+   pickle.dump(insmoothnessspectralexponent_list,f)        
+   f.close()   
   
    f = open('antennaconstraint.p', 'wb') 
    pickle.dump(inantennaconstraint_list,f)        
@@ -2407,6 +2414,7 @@ def auto_determinesolints(mslist, soltype_list, longbaseline, LBA,\
    print('solint:',insolint_list)
    print('smoothnessconstraint:',insmoothnessconstraint_list)
    print('smoothnessreffrequency:',insmoothnessreffrequency_list)
+   print('smoothnessspectralexponent_list:',insmoothnessspectralexponent_list)
    print('antennaconstraint:',inantennaconstraint_list)
    print('soltypecycles:',insoltypecycles_list)
 
@@ -2415,11 +2423,12 @@ def auto_determinesolints(mslist, soltype_list, longbaseline, LBA,\
    logger.info('solint: ' + str(insolint_list))
    logger.info('smoothnessconstraint: ' + str(insmoothnessconstraint_list))
    logger.info('smoothnessreffrequency: ' + str(insmoothnessreffrequency_list))
+   logger.info('smoothnessspectralexponent: ' + str(insmoothnessspectralexponent_list))
    logger.info('antennaconstraint: ' + str(inantennaconstraint_list))
    logger.info('soltypecycles: ' + str(insoltypecycles_list))
 
       
-   return innchan_list, insolint_list, insmoothnessconstraint_list, insmoothnessreffrequency_list, inantennaconstraint_list, insoltypecycles_list
+   return innchan_list, insolint_list, insmoothnessconstraint_list, insmoothnessreffrequency_list, insmoothnessspectralexponent_list, inantennaconstraint_list, insoltypecycles_list
 
 
 
@@ -2865,12 +2874,14 @@ def beamcor(ms, usedppp=True):
     losoto = 'losoto'
     taql = 'taql'
     H5name = create_beamcortemplate(ms)
-    parset = create_losoto_beamcorparset(ms)
+
 
     losotolofarbeam(H5name, 'phase000', ms, useElementResponse=False, useArrayFactor=True, useChanFreq=True)
     losotolofarbeam(H5name, 'amplitude000', ms, useElementResponse=False, useArrayFactor=True, useChanFreq=True)   
 
     phasedup = fixbeam_ST001(H5name)
+    parset = create_losoto_beamcorparset(ms, refant=findrefant_core(H5name))
+    force_close(H5name)
 
     if usedppp and not phasedup :
         cmddppp = 'DP3 numthreads='+str(multiprocessing.cpu_count())+ ' msin=' + ms + ' msin.datacolumn=DATA msout=. '
@@ -3164,21 +3175,78 @@ def declination_sensivity_factor(declination):
 
     return factor
 
-#print declination_sensivity_factor(-3.7)
-#sys.exit()
+
 
 def flaglowamps(parmdb, lowampval=0.1, flagging=True, setweightsphases=True):
     '''
     flag bad amplitudes in H5 parmdb, those with values < lowampval
+    assume pol-axis is present (can handle length, 1 (scalar), 2 (diagonal), or 4 (fulljones))
     '''
     H5 = h5parm.h5parm(parmdb, readonly=False) 
     amps =H5.getSolset('sol000').getSoltab('amplitude000').getValues()[0]
-    idx = np.where(amps < lowampval)
     weights = H5.getSolset('sol000').getSoltab('amplitude000').getValues(weight=True)[0]
+
+    amps_xx = amps[...,0]
+    amps_yy = amps[...,-1] # so this also works for pol axis length 1
+    weights_xx = weights[...,0]
+    weights_yy =weights[...,-1]
+    idx_xx = np.where(amps_xx < lowampval)
+    idx_yy = np.where(amps_yy < lowampval)
     
     if flagging: # no flagging
-      weights[idx] = 0.0
+      weights_xx[idx_xx] = 0.0
+      weights_yy[idx_yy] = 0.0
       print('Settting some weights to zero in flaglowamps')
+    
+    amps_xx[idx_xx] = 1.0
+    amps_yy[idx_yy] = 1.0
+
+    weights[...,0] = weights_xx
+    weights[...,-1] = weights_yy
+    amps[...,0] = amps_xx
+    amps[...,-1] = amps_yy
+
+    H5.getSolset('sol000').getSoltab('amplitude000').setValues(weights,weight=True)
+    H5.getSolset('sol000').getSoltab('amplitude000').setValues(amps)
+
+    #also put phases weights and phases to zero
+    if setweightsphases:
+        phases = H5.getSolset('sol000').getSoltab('phase000').getValues()[0]
+        weights_p = H5.getSolset('sol000').getSoltab('phase000').getValues(weight=True)[0]
+        phases_xx = phases[...,0]
+        phases_yy = phases[...,-1]
+        weights_p_xx = weights_p[...,0]
+        weights_p_yy = weights_p[...,-1]
+        
+        if flagging: # no flagging
+            weights_p_xx[idx_xx] = 0.0
+            weights_p_yy[idx_yy] = 0.0
+            phases_xx[idx_xx] = 0.0
+            phases_yy[idx_yy] = 0.0
+            
+            weights_p[...,0] = weights_xx_p
+            weights_p[...,-1] = weights_yy_p
+            phases[...,0] = phases_xx
+            phases[...,-1] = phases_yy
+        
+            H5.getSolset('sol000').getSoltab('phase000').setValues(weights_p,weight=True)
+            H5.getSolset('sol000').getSoltab('phase000').setValues(phases)
+    H5.close()
+    return
+
+def flaghighamps(parmdb, highampval=10.,flagging=True, setweightsphases=True):
+    '''
+    flag bad amplitudes in H5 parmdb, those with values > highampval
+    '''
+    H5 = h5parm.h5parm(parmdb, readonly=False) 
+    amps =H5.getSolset('sol000').getSoltab('amplitude000').getValues()[0]
+    idx = np.where(amps > highampval)
+    weights = H5.getSolset('sol000').getSoltab('amplitude000').getValues(weight=True)[0]
+    
+    
+    if flagging: 
+      weights[idx] = 0.0
+      print('Settting some weights to zero in flaghighamps')
     amps[idx] = 1.0
     H5.getSolset('sol000').getSoltab('amplitude000').setValues(weights,weight=True)
     H5.getSolset('sol000').getSoltab('amplitude000').setValues(amps)
@@ -3187,16 +3255,17 @@ def flaglowamps(parmdb, lowampval=0.1, flagging=True, setweightsphases=True):
     if setweightsphases:
         phases =H5.getSolset('sol000').getSoltab('phase000').getValues()[0]
         weights_p = H5.getSolset('sol000').getSoltab('phase000').getValues(weight=True)[0]
-        if flagging: # no flagging
+        if flagging: 
             weights_p[idx] = 0.0
             phases[idx] = 0.0
+            #print(idx)
             H5.getSolset('sol000').getSoltab('phase000').setValues(weights_p,weight=True)
             H5.getSolset('sol000').getSoltab('phase000').setValues(phases)
     
+    #H5.getSolset('sol000').getSoltab('phase000').flush()
+    #H5.getSolset('sol000').getSoltab('amplitude000').flush()
     H5.close()
     return
-
-
 
 def flagbadamps(parmdb, setweightsphases=True):
     '''
@@ -3227,19 +3296,40 @@ def flagbadamps(parmdb, setweightsphases=True):
     return
 
 
-def medianamp(parmdb):
-    H5 = h5parm.h5parm(parmdb, readonly=True) 
-    amps =H5.getSolset('sol000').getSoltab('amplitude000').getValues()[0]
+def medianamp(h5):
+    # assume pol-axis is present (can handle length, 1 (scalar), 2 (diagonal), or 4 (fulljones))
+    H=tables.open_file(h5) 
+    amplitude = H.root.sol000.amplitude000.val[:]
+    weights   = H.root.sol000.amplitude000.weight[:]
+    if amplitude.shape[-1] == 4:
+      fulljones = True
+    else:
+      fulljones = False
+    H.close()
     
-    idx = np.where(amps <= 0.0) # to catch bad amps (should not be there but apparently sometimes a zero slips through
-    amps[idx] = 1.0
+    print('Amplitude and Weights shape:', weights.shape, amplitude.shape)
+    amps_xx = amplitude[...,0]
+    amps_yy = amplitude[...,-1] # so this also works for pol axis length 1
+    weights_xx = weights[...,0]
+    weights_yy = weights[...,-1]
+
+    idx_xx = np.where(weights_xx != 0.0)    
+    idx_yy = np.where(weights_yy != 0.0)
     
-    weights = H5.getSolset('sol000').getSoltab('amplitude000').getValues(weight=True)[0]
-    idx = np.where(weights != 0.0)
-    medamps = 10**(np.nanmedian(np.log10(amps[idx])))
-    H5.close()
-    print('Median amplitude of ', parmdb, ':', medamps)
-    logger.info('Median amplitude of ' + parmdb + ': ' + str(medamps))
+    medamps = 0.5*(10**(np.nanmedian(np.log10(amps_xx[idx_xx]))) + 10**(np.nanmedian(np.log10(amps_yy[idx_yy]))))
+    print('Median  Stokes I amplitude of ', h5, ':', medamps)
+    
+    if fulljones:
+       amps_xy = amplitude[...,1]
+       amps_yx = amplitude[...,2] 
+       weights_xy = weights[...,1]
+       weights_yx = weights[...,2]
+       idx_xy = np.where(weights_xy != 0.0)    
+       idx_yx = np.where(weights_yx != 0.0)
+       medamps_cross = 0.5*(10**(np.nanmedian(np.log10(amps_xy[idx_xy]))) + 10**(np.nanmedian(np.log10(amps_yx[idx_yx]))))
+       print('Median amplitude of XY+YX ', h5, ':', medamps_cross)
+
+    logger.info('Median Stokes I amplitude of ' + h5 + ': ' + str(medamps))
     return medamps
 
 def normamplitudes(parmdb):
@@ -3290,41 +3380,20 @@ def normamplitudes(parmdb):
     return
 
 
-
-
-
-
-def flaghighgamps(parmdb, highampval=10.,flagging=True, setweightsphases=True):
+def checkforzerocleancomponents(imagenames):
     '''
-    flag bad amplitudes in H5 parmdb, those with values > highampval
+    check if something was cleaned, if not stop de script to avoid more obscure errors later
     '''
-    H5 = h5parm.h5parm(parmdb, readonly=False) 
-    amps =H5.getSolset('sol000').getSoltab('amplitude000').getValues()[0]
-    idx = np.where(amps > highampval)
-    weights = H5.getSolset('sol000').getSoltab('amplitude000').getValues(weight=True)[0]
-    
-    
-    if flagging: 
-      weights[idx] = 0.0
-      print('Settting some weights to zero in flaghighgamps')
-    amps[idx] = 1.0
-    H5.getSolset('sol000').getSoltab('amplitude000').setValues(weights,weight=True)
-    H5.getSolset('sol000').getSoltab('amplitude000').setValues(amps)
-
-    #also put phases weights and phases to zero
-    if setweightsphases:
-        phases =H5.getSolset('sol000').getSoltab('phase000').getValues()[0]
-        weights_p = H5.getSolset('sol000').getSoltab('phase000').getValues(weight=True)[0]
-        if flagging: 
-            weights_p[idx] = 0.0
-            phases[idx] = 0.0
-            #print(idx)
-            H5.getSolset('sol000').getSoltab('phase000').setValues(weights_p,weight=True)
-            H5.getSolset('sol000').getSoltab('phase000').setValues(phases)
-    
-    #H5.getSolset('sol000').getSoltab('phase000').flush()
-    #H5.getSolset('sol000').getSoltab('amplitude000').flush()
-    H5.close()
+    for image_id, image in enumerate(imagenames):
+        print('Check if there are non-zero pixels: ', image)
+        hdul = fits.open(image)
+        data = hdul[0].data
+        if not np.any(data): # this checks if all elements are 0.0
+          print('Model image:', image, 'contains only zeros. Stopping the selfcal')
+          hdul.close()
+          logger.error('Model image: ' + image + ' contains only zeros. Stopping the selfcal')
+          sys.exit()
+        hdul.close()
     return
 
 
@@ -3500,6 +3569,11 @@ def makeimage(mslist, imageout, pixsize, imsize, channelsout, niter, robust, \
         else:    
             removenegativefrommodel(sorted(glob.glob(imageout + '-????-model.fits')))
 
+      # Check is anything was cleaned. If not, stop the selfcal to avoid obscure errors later 
+      if idg:
+        checkforzerocleancomponents(glob.glob(imageout +'-????-I-model*.fits'))  # only Stokes I
+      else:    
+        checkforzerocleancomponents(glob.glob(imageout + '-????-model.fits'))
 
       if predict:
         cmd = 'wsclean -size ' 
@@ -3549,9 +3623,9 @@ def makeimage(mslist, imageout, pixsize, imsize, channelsout, niter, robust, \
 
 def calibrateandapplycal(mslist, selfcalcycle, args, solint_list, nchan_list, \
               soltype_list, soltypecycles_list, \
-              smoothnessconstraint_list, smoothnessreffrequency_list, antennaconstraint_list, uvmin=0, normamps=False, skymodel=None, predictskywithbeam=False, restoreflags=False, \
+              smoothnessconstraint_list, smoothnessreffrequency_list, smoothnessspectralexponent_list, antennaconstraint_list, uvmin=0, normamps=False, skymodel=None, predictskywithbeam=False, restoreflags=False, \
               flagging=False, longbaseline=False, BLsmooth=False, flagslowphases=True, flagslowamprms=7.0, flagslowphaserms=7.0, skymodelsource=None, skymodelpointsource=None, wscleanskymodel=None, \
-              ionfactor=0.01, blscalefactor=1.0, dejumpFR=False, uvminscalarphasediff=0):
+              ionfactor=0.01, blscalefactor=1.0, dejumpFR=False, uvminscalarphasediff=0, docircular=False):
 
    soltypecycles_list_array = np.array(soltypecycles_list) # needed to slice (slicing does not work in nested l
    incol = [] # len(mslist)
@@ -3590,6 +3664,7 @@ def calibrateandapplycal(mslist, selfcalcycle, args, solint_list, nchan_list, \
                      longbaseline=longbaseline, uvmin=uvmin, \
                      SMconstraint=smoothnessconstraint_list[soltypenumber][msnumber], \
                      SMconstraintreffreq=smoothnessreffrequency_list[soltypenumber][msnumber],\
+                     SMconstraintspectralexponent=smoothnessspectralexponent_list[soltypenumber][msnumber],\
                      antennaconstraint=antennaconstraint_list[soltypenumber][msnumber], \
                      restoreflags=restoreflags, maxiter=100, flagging=flagging, skymodel=skymodel, \
                      flagslowphases=flagslowphases, flagslowamprms=flagslowamprms, \
@@ -3637,10 +3712,14 @@ def calibrateandapplycal(mslist, selfcalcycle, args, solint_list, nchan_list, \
      for msnumber, ms in enumerate(mslist):
        if skymodel != None and selfcalcycle == 0: 
          parmdbmergename = 'merged_skyselfcalcyle' + str(selfcalcycle).zfill(3) + '_' + ms + '.h5'
+         parmdbmergename_pc = 'merged_skyselfcalcyle' + str(selfcalcycle).zfill(3) + '_linearfulljones_' + ms + '.h5'
        else:
-         parmdbmergename = 'merged_selfcalcyle' + str(selfcalcycle).zfill(3) + '_' + ms + '.h5'    
+         parmdbmergename = 'merged_selfcalcyle' + str(selfcalcycle).zfill(3) + '_' + ms + '.h5'
+         parmdbmergename_pc = 'merged_selfcalcyle' + str(selfcalcycle).zfill(3) + '_linearfulljones_' + ms + '.h5' 
        if os.path.isfile(parmdbmergename):
          os.system('rm -f ' + parmdbmergename)
+       if os.path.isfile(parmdbmergename_pc):
+         os.system('rm -f ' + parmdbmergename_pc)
        
        # add extra from preapplyH5_list
        if args['preapplyH5_list'][0] != None:
@@ -3652,6 +3731,9 @@ def calibrateandapplycal(mslist, selfcalcycle, args, solint_list, nchan_list, \
        print(parmdbmergename,parmdbmergelist[msnumber],ms)
        h5_merger.merge_h5(h5_out=parmdbmergename,h5_tables=parmdbmergelist[msnumber],ms_files=ms,\
                           convert_tec=True, merge_all_in_one=True, propagate_flags=True)
+       if ('scalarphasediff' in soltype_list) or ('scalarphasediffFR' in soltype_list) or docircular:
+         h5_merger.merge_h5(h5_out=parmdbmergename_pc, h5_tables=parmdbmergename, circ2lin=True)
+       
        if False:
          #testing only to check if merged H5 file is correct and makes a good image
          applycal(ms, parmdbmergename, msincol='DATA',msoutcol='CORRECTED_DATA')
@@ -3663,15 +3745,29 @@ def calibrateandapplycal(mslist, selfcalcycle, args, solint_list, nchan_list, \
                             refant=findrefant_core(parmdbmergename))  
        os.system('losoto ' + parmdbmergename + ' ' + losotoparset)
        force_close(parmdbmergename)
-   #except:
-   #  pass 
- 
    return 
 
 
+def is_binary(file_name):
+    ''' Check if a file contains text (and thus is a skymodel file, for example).
+    Example from https://stackoverflow.com/questions/2472221/how-to-check-if-a-file-contains-plain-text
+    Args:
+        file_name (str): path to the file to determine the binary nature of.
+    Returns:
+        result (bool): returns whether the file is binary (True) or not (False).
+    '''
+    f = magic.Magic(mime=True)
+    mime = f.from_file(file_name)
+    if 'text' in mime:
+        return False
+    else:
+        return True
+
 def predictsky(ms, skymodel, modeldata='MODEL_DATA', predictskywithbeam=False, sources=None):
    
-   if skymodel.split('.')[-1] != 'sourcedb':
+   if is_binary(skymodel):
+      sourcedb = skymodel 
+   else:
       #make sourcedb
       sourcedb = skymodel + 'sourcedb'
       if os.path.isfile(sourcedb):
@@ -3679,10 +3775,7 @@ def predictsky(ms, skymodel, modeldata='MODEL_DATA', predictskywithbeam=False, s
       cmdmsdb = "makesourcedb in=" + skymodel + " "
       cmdmsdb += "out=" + sourcedb + " outtype='blob' format='<' append=False"
       print(cmdmsdb)
-      os.system(cmdmsdb)
-   else:
-      sourcedb = skymodel    
-   
+      os.system(cmdmsdb)         
    
    cmd = 'DP3 numthreads='+str(multiprocessing.cpu_count())+ ' msin=' + ms + ' msout=. ' 
    cmd += 'p.sourcedb=' + sourcedb + ' steps=[p] p.type=predict msout.datacolumn=' + modeldata + ' '
@@ -3695,8 +3788,9 @@ def predictsky(ms, skymodel, modeldata='MODEL_DATA', predictskywithbeam=False, s
    return    
 
 def runDPPPbase(ms, solint, nchan, parmdb, soltype, longbaseline=False, uvmin=0, \
-                SMconstraint=0.0, SMconstraintreffreq=0.0, antennaconstraint=None, \
-                restoreflags=False, \
+                SMconstraint=0.0, SMconstraintreffreq=0.0, \
+                SMconstraintspectralexponent=-1.0, antennaconstraint=None, \
+                restoreflags=False, solveralgorithm='directionsolve', \
                 maxiter=100, flagging=False, skymodel=None, flagslowphases=True, \
                 flagslowamprms=7.0, flagslowphaserms=7.0, incol='DATA', \
                 predictskywithbeam=False, BLsmooth=False, skymodelsource=None, \
@@ -3704,7 +3798,6 @@ def runDPPPbase(ms, solint, nchan, parmdb, soltype, longbaseline=False, uvmin=0,
                 blscalefactor=1.0, dejumpFR=False, uvminscalarphasediff=0,selfcalcycle=0):
     
     soltypein = soltype # save the input soltype is as soltype could be modified (for example by scalarphasediff)
-    
     
     
     modeldata = 'MODEL_DATA' # the default, update if needed for scalarphasediff and phmin solves
@@ -3731,7 +3824,6 @@ def runDPPPbase(ms, solint, nchan, parmdb, soltype, longbaseline=False, uvmin=0,
                onlypredict=True, idg=False, usewgridder=True)
 
 
-
     if skymodelpointsource !=None and soltypein != 'scalarphasediff' and soltypein != 'scalarphasediffFR':
         # create MODEL_DATA (no dysco!)
         os.system('DP3 msin=' + ms + ' msout=. msout.datacolumn=MODEL_DATA steps=[]')
@@ -3756,7 +3848,11 @@ def runDPPPbase(ms, solint, nchan, parmdb, soltype, longbaseline=False, uvmin=0,
       incol = 'DATA_PHASE_SLOPE'
       modeldata = 'MODEL_DATA_PHASE_SLOPE'      
 
-
+    if soltype in ['fulljones']:
+      print('Setting XY and YX to 0+0i')  
+      os.system("taql" + " 'update " + ms + " set MODEL_DATA[,1]=(0+0i)'")
+      os.system("taql" + " 'update " + ms + " set MODEL_DATA[,2]=(0+0i)'")   
+     
     if soltype in ['phaseonly','complexgain','fulljones','rotation+diagonal','amplitudeonly']: # for 1D plotting
       onepol = False
     if soltype in ['scalarphase','tecandphase','tec','scalaramplitude','scalarcomplexgain','rotation']:
@@ -3804,6 +3900,7 @@ def runDPPPbase(ms, solint, nchan, parmdb, soltype, longbaseline=False, uvmin=0,
     cmd += 'msout=. ddecal.mode=' + soltype + ' '
     cmd += 'msin.weightcolumn='+weight_spectrum + ' '
     cmd += 'steps=[ddecal] ' + 'msout.storagemanager=dysco ddecal.type=ddecal '
+    cmd += 'ddecal.solveralgorithm=' + solveralgorithm + ' '
     cmd += 'ddecal.maxiter='+str(np.int(maxiter)) + ' ddecal.propagatesolutions=True '
     cmd += 'ddecal.usemodelcolumn=True '
     cmd += 'msin.modelcolumn=' + modeldata + ' '  
@@ -3826,7 +3923,8 @@ def runDPPPbase(ms, solint, nchan, parmdb, soltype, longbaseline=False, uvmin=0,
         cmd += 'ddecal.antennaconstraint=' + antennaconstraintstr(antennaconstraint, antennasms, HBAorLBA) + ' '
     if SMconstraint > 0.0 and nchan != 0:
         cmd += 'ddecal.smoothnessconstraint=' + str(SMconstraint*1e6) + ' ' 
-        cmd += 'ddecal.smoothnessreffrequency=' + str(SMconstraintreffreq*1e6) + ' ' 
+        cmd += 'ddecal.smoothnessreffrequency=' + str(SMconstraintreffreq*1e6) + ' '
+        cmd += 'ddecal.smoothnessspectralexponent=' + str(SMconstraintspectralexponent) + ' '
         
     if soltype in ['phaseonly','scalarphase','tecandphase','tec','rotation']:
        cmd += 'ddecal.tolerance=1.e-4 '
@@ -3890,23 +3988,17 @@ def runDPPPbase(ms, solint, nchan, parmdb, soltype, longbaseline=False, uvmin=0,
     # Check for bad values  
     if soltype in ['scalarcomplexgain','complexgain','amplitudeonly','scalaramplitude','fulljones','rotation+diagonal']:
       flagbadamps(parmdb, setweightsphases=includesphase)
-      if soltype != 'fulljones':
-        removenans(parmdb, 'amplitude000')
-        medamp = medianamp(parmdb) # fu
-      else:
-        print('Not implemented, medamp of fulljones')
-        sys.exit() 
-
-
+      removenans(parmdb, 'amplitude000')
+      medamp = medianamp(parmdb) # fu
+      
       if soltype != 'amplitudeonly' and soltype != 'scalaramplitude':
          try:
            change_refant(parmdb,'phase000')
          except:
            pass
          removenans(parmdb, 'phase000')
-      removenans(parmdb, 'amplitude000')
       flaglowamps(parmdb, lowampval=medamp*0.1, flagging=flagging, setweightsphases=includesphase)
-      flaghighgamps(parmdb, highampval=medamp*10., flagging=flagging, setweightsphases=includesphase)
+      flaghighamps(parmdb, highampval=medamp*10., flagging=flagging, setweightsphases=includesphase)
       
     # makes plots and do LOSOTO flagging      
     if soltype in ['rotation','rotation+diagonal']:
@@ -4032,6 +4124,9 @@ def findrefant_core(H5file):
     if 'ST001' in ants:
         return 'ST001'
     cs_indices = np.where(['CS' in ant for ant in ants])[0]
+
+    if len(cs_indices) == 0: # in case there are no CS stations try with RS
+       cs_indices = np.where(['RS' in ant for ant in ants])[0]
 
     # Find the antennas and which dimension that corresponds to
     ant_index = np.where(np.array(soltab.getAxesNames())=='ant')[0][0]
@@ -4271,7 +4366,8 @@ def main():
    parser.add_argument("--solint-list", type=arg_as_list, default=[1,1,120],help="List of values")
    parser.add_argument("--nchan-list", type=arg_as_list, default=[1,1,10],help="List of values")
    parser.add_argument("--smoothnessconstraint-list", type=arg_as_list, default=[0.,0.,5.],help="List of values")
-   parser.add_argument("--smoothnessreffrequency-list", type=arg_as_list, default=[0.,0.,0.],help="An optional reference frequency (in MHz) for the smoothness constraint. When unequal to 0, the size of the smoothing kernel will vary over frequency by a factor of frequency/smoothnessreffrequency, i.e., the kernel will be smaller for lower frequencies, default is [0.0]")
+   parser.add_argument("--smoothnessreffrequency-list", type=arg_as_list, default=[0.,0.,0.],help="An optional reference frequency (in MHz) for the smoothness constraint. When unequal to 0, the size of the smoothing kernel will vary over frequency by a factor of smoothnessreffrequency*(frequnecy**smoothnessspectralexponent)")
+   parser.add_argument("--smoothnessspectralexponent-list", type=arg_as_list, default=[-1.,-1.,-1.],help="If smoothnessreffrequency is not equal to zero then this paramter determines the freqeuency scaling law, default=-1 (1/nu), for scalarphasediff -2 might be useful")
    parser.add_argument("--antennaconstraint-list", type=arg_as_list, default=[None,None,None],help="List of values")
    parser.add_argument("--soltypecycles-list", type=arg_as_list, default=[0,999,3],help="List of values, first entry is required to be 0")
    parser.add_argument("--BLsmooth", help='Employ BLsmooth for low S/N data', action='store_true')
@@ -4360,7 +4456,7 @@ def main():
    print( 'args after' )
    print( args )
 
-   version = '3.3.0'
+   version = '3.5.0'
    print_title(version)
 
    os.system('cp ' + args['helperscriptspath'] + '/lib_multiproc.py .')
@@ -4491,6 +4587,7 @@ def main():
      else:
         args['smoothnessconstraint_list'] = [10.0, 5.0] 
         args['smoothnessreffrequency_list'] = [120.0, 0.0] 
+        args['smoothnessspectralexponent_list'] = [-1.0, -1.0]
      args['uvmin'] =  20000
      if LBA:
        args['BLsmooth'] = True
@@ -4514,6 +4611,7 @@ def main():
      args['soltype_list'] = ['scalarphasediff','scalarphase','scalarcomplexgain']
      args['smoothnessconstraint_list'] = [8.0,2.0,15.0]
      args['smoothnessreffrequency_list'] = [120.,144.,0.0]
+     args['smoothnessspectralexponent_list'] = [-2.0,-1.0,-1.0]
      args['antennaconstraint_list'] = ['alldutch',None,None] 
      args['nchan_list'] = [1,1,1]    
      args['uvmin'] =  40000 
@@ -4616,16 +4714,18 @@ def main():
 
 
    if args['start'] == 0:
-     os.system('rm -f nchan.p solint.p smoothnessconstraint.p smoothnessreffrequency.p antennaconstraint.p soltypecycles.p') 
+     os.system('rm -f nchan.p solint.p smoothnessconstraint.p smoothnessreffrequency.p smoothnessspectralexponent.p antennaconstraint.p soltypecycles.p') 
 
 
 
    
-   nchan_list,solint_list,smoothnessconstraint_list, smoothnessreffrequency_list,  antennaconstraint_list, soltypecycles_list = \
+   nchan_list,solint_list,smoothnessconstraint_list, smoothnessreffrequency_list,  smoothnessspectralexponent_list, antennaconstraint_list, soltypecycles_list = \
                                               setinitial_solint(mslist, args['soltype_list'],longbaseline, LBA, \
                                               args['nchan_list'], args['solint_list'], \
                                               args['smoothnessconstraint_list'], \
-                                              args['smoothnessreffrequency_list'], args['antennaconstraint_list'],\
+                                              args['smoothnessreffrequency_list'], \
+                                              args['smoothnessspectralexponent_list'],\
+                                              args['antennaconstraint_list'],\
                                               args['soltypecycles_list'])
 
 
@@ -4650,11 +4750,17 @@ def main():
            if os.path.isfile(args['imagename'] + str(i-1).zfill(3) + '.app.restored.fits'):
                fitsmask = args['imagename'] + str(i-1).zfill(3) + '.app.restored.fits.mask.fits'
 
+
+
        
      # BEAM CORRECTION
      if not args['no_beamcor'] and i == 0:
          for ms in mslist:
            beamcor(ms, usedppp=args['use_dpppbeamcor'])
+
+     # PHASE-UP if requested
+     #if args['phaseupstations'] != None and i== 0:
+     #    mslist = phaseup(mslist,datacolumn='DATA',superstation=args['phaseupstations'])
 
      # CONVERT TO CIRCULAR/LINEAR CORRELATIONS      
      if (args['docircular'] or args['dolinear']) and i == 0:
@@ -4676,16 +4782,16 @@ def main():
          mslist = mslist_backup[:]  # reset back, note copy by slicing otherwise list refers to original 
          preapply(create_mergeparmdbname(mslist, i-1), mslist, updateDATA=False) # do not overwrite DATA column
 
-     # PHASE-UP if requested
-     if args['phaseupstations'] != None and i== 0:
-         mslist = phaseup(mslist,datacolumn='DATA',superstation=args['phaseupstations'])
-
-
+     #PHASE-UP if requested
+     if args['phaseupstations'] != None:
+         if (i == 0) or (i == args['start']):
+             mslist = phaseup(mslist,datacolumn='DATA',superstation=args['phaseupstations'], start=i)
   
      # CALIBRATE AGAINST SKYMODEL
      if (args['skymodel'] != None or args['skymodelpointsource'] != None or args['wscleanskymodel'] != None) and (i ==0):
         calibrateandapplycal(mslist, i, args, solint_list, nchan_list, args['soltype_list'], \
                              soltypecycles_list, smoothnessconstraint_list, smoothnessreffrequency_list, \
+                             smoothnessspectralexponent_list, \
                              antennaconstraint_list, uvmin=args['uvmin'], normamps=args['normampsskymodel'], \
                              skymodel=args['skymodel'], \
                              predictskywithbeam=args['predictskywithbeam'], \
@@ -4696,7 +4802,7 @@ def main():
                              skymodelsource=args['skymodelsource'], skymodelpointsource=args['skymodelpointsource'],\
                              wscleanskymodel=args['wscleanskymodel'], ionfactor=args['ionfactor'], \
                              blscalefactor=args['blscalefactor'], dejumpFR=args['dejumpFR'],\
-                             uvminscalarphasediff=args['uvminscalarphasediff']) 
+                             uvminscalarphasediff=args['uvminscalarphasediff'], docircular=args['docircular']) 
 
 
   
@@ -4759,13 +4865,15 @@ def main():
      # REDETERMINE SOLINTS IF REQUESTED
      if (i >= 0) and (args['usemodeldataforsolints']):
        print('Recomputing solints .... ')
-       nchan_list,solint_list,smoothnessconstraint_list,smoothnessreffrequency_list, \
-       antennaconstraint_list,soltypecycles_list  = \
+       nchan_list,solint_list,smoothnessconstraint_list,smoothnessreffrequency_list,\
+                              smoothnessspectralexponent_list, antennaconstraint_list, \
+                              soltypecycles_list  = \
                               auto_determinesolints(mslist, args['soltype_list'], \
                               longbaseline, LBA, \
                               innchan_list=nchan_list, insolint_list=solint_list, \
                               insmoothnessconstraint_list=smoothnessconstraint_list, \
                               insmoothnessreffrequency_list=smoothnessreffrequency_list,\
+                              insmoothnessspectralexponent_list=smoothnessspectralexponent_list,\
                               inantennaconstraint_list=antennaconstraint_list, \
                               insoltypecycles_list=soltypecycles_list, redo=True, \
                               tecfactorsolint=args['tecfactorsolint'], \
@@ -4774,13 +4882,16 @@ def main():
 
      # CALIBRATE AND APPLYCAL
      calibrateandapplycal(mslist, i, args, solint_list, nchan_list, args['soltype_list'], soltypecycles_list,\
-                           smoothnessconstraint_list, smoothnessreffrequency_list, antennaconstraint_list, uvmin=args['uvmin'], \
+                           smoothnessconstraint_list, smoothnessreffrequency_list,\
+                           smoothnessspectralexponent_list, \
+                           antennaconstraint_list, uvmin=args['uvmin'], \
                            normamps=args['normamps'], restoreflags=args['restoreflags'], \
                            flagging=args['doflagging'], longbaseline=longbaseline, \
                            BLsmooth=args['BLsmooth'], flagslowphases=args['doflagslowphases'], \
                            flagslowamprms=args['flagslowamprms'], flagslowphaserms=args['flagslowphaserms'],\
                            ionfactor=args['ionfactor'], blscalefactor=args['blscalefactor'],\
-                           dejumpFR=args['dejumpFR'], uvminscalarphasediff=args['uvminscalarphasediff'])
+                           dejumpFR=args['dejumpFR'], uvminscalarphasediff=args['uvminscalarphasediff'],\
+                           docircular=args['docircular'])
 
 
  
