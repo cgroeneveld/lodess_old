@@ -1,5 +1,7 @@
 # The LOFAR Decameter Sky Survey Pipeline (DeSSPi)
 
+## Note: This repository is kept as a legacy repository. This pipeline has been used for the Nature Astronomy publication: https://doi.org/10.1038/s41550-024-02266-z
+
 The LOFAR Decameter Sky Survey (LoDeSS) is a survey of the northern sky, performed at frequencies between 14 and 30 MHz. Due to the unique nature of this 
 frequency range, we created a new pipeline for calibration. In addition, we include some other programs that help with finding the right parameters.
 
